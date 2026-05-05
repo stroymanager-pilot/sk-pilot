@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0d1f3c">
+<title>Сводка СК — Стройменеджер</title>
+<link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#0d1f3c;--navy2:#152c52;--navy3:#1e3d6e;
+  --gold:#d4a843;--gold-pale:#fdf3dc;
+  --red:#c84040;--red-pale:#fde8e8;
+  --green:#3a8c5c;--green-pale:#e4f2ec;
+  --amber:#b87a10;--amber-pale:#fef3cd;
+  --blue-pale:#e0eaf8;
+  --surface:#f0f3f9;--surface2:#e2e8f4;--border:#c8d2e8;
+  --text:#0d1f3c;--text2:#4a5f80;--text3:#8098b8;
+  --white:#fff;
+  --r:12px;--r-sm:8px;--r-xs:6px;
+  --shadow:0 2px 12px rgba(13,31,60,.09);
+  --font:'Golos Text',sans-serif;--mono:'JetBrains Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:var(--font);background:var(--surface);color:var(--text);min-height:100dvh;overflow-x:hidden;font-size:15px}
+
+/* HEADER */
+.hdr{background:var(--navy);color:#fff;position:sticky;top:0;z-index:100;box-shadow:0 4px 20px rgba(13,31,60,.25)}
+.hdr-row{display:flex;align-items:center;justify-content:space-between;padding:11px 16px 9px}
+.hdr-brand{display:flex;align-items:center;gap:10px}
+.hdr-mark{width:32px;height:32px;background:var(--gold);border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;font-weight:700;color:var(--navy);flex-shrink:0}
+.hdr-title{font-size:14px;font-weight:700;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hdr-sub{font-size:11px;color:rgba(255,255,255,.45);margin-top:1px}
+.hdr-right{display:flex;align-items:center;gap:8px}
+.status-pill{font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;background:rgba(255,255,255,.12);color:rgba(255,255,255,.6)}
+.status-pill.submitted{background:rgba(58,140,92,.35);color:#6be8a0}
+.sync-dot{width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0}
+.sync-dot.saving{background:var(--gold);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.logout-btn{background:rgba(255,255,255,.1);border:none;color:rgba(255,255,255,.6);border-radius:7px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)}
+
+/* PROGRESS + NAV */
+.prog-bar{height:3px;background:rgba(255,255,255,.1)}
+.prog-fill{height:100%;background:var(--gold);transition:width .4s}
+.step-nav{display:flex;padding:6px 12px;gap:4px;overflow-x:auto;scrollbar-width:none;background:var(--navy2)}
+.step-nav::-webkit-scrollbar{display:none}
+.step-pill{flex-shrink:0;padding:5px 11px;border-radius:20px;font-size:11px;font-weight:700;color:rgba(255,255,255,.4);cursor:pointer;border:none;background:transparent;white-space:nowrap;font-family:var(--font);transition:all .15s}
+.step-pill.active{background:var(--gold);color:var(--navy)}
+.step-pill.has-data{color:rgba(255,255,255,.75)}
+.step-pill .cnt{background:rgba(255,255,255,.2);border-radius:8px;padding:0 5px;margin-left:3px;font-size:10px}
+.step-pill.active .cnt{background:rgba(13,31,60,.2)}
+
+/* MAIN */
+.main{padding:14px;padding-bottom:90px;max-width:680px;margin:0 auto}
+.sec{display:none}.sec.active{display:block}
+.step-h{font-size:19px;font-weight:800;color:var(--navy);letter-spacing:-.3px;margin-bottom:3px}
+.step-d{font-size:13px;color:var(--text3);margin-bottom:14px}
+
+/* CARDS */
+.card{background:#fff;border-radius:var(--r);padding:16px;margin-bottom:12px;box-shadow:var(--shadow);border:1px solid var(--border)}
+.card-h{font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px;display:flex;align-items:center;gap:7px}
+.card-h .ico{width:22px;height:22px;background:var(--surface2);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px}
+.card-h .count{margin-left:auto;font-size:11px;font-weight:700;background:var(--blue-pale);color:var(--navy3);padding:2px 8px;border-radius:10px}
+
+/* INFO TABLE */
+.info-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--surface2);font-size:14px;gap:12px}
+.info-row:last-child{border-bottom:none}
+.info-lbl{color:var(--text3);font-size:12px;font-weight:600;flex-shrink:0}
+.info-val{color:var(--text);text-align:right}
+.chip{display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px}
+.chip-draft{background:var(--amber-pale);color:var(--amber)}
+.chip-ok{background:var(--green-pale);color:var(--green)}
+.chip-active{background:var(--green-pale);color:var(--green)}
+
+/* FORM */
+label.fl{display:block;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px;margin-top:12px}
+label.fl:first-child,label.fl.no-mt{margin-top:0}
+input[type=text],input[type=number],input[type=date],input[type=time],input[type=email],select,textarea{
+  width:100%;background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r-sm);
+  padding:10px 12px;font-family:var(--font);font-size:15px;color:var(--text);outline:none;
+  transition:border-color .2s,box-shadow .2s;-webkit-appearance:none;appearance:none}
+input:focus,select:focus,textarea:focus{border-color:var(--navy3);box-shadow:0 0 0 3px rgba(30,61,110,.1);background:#fff}
+textarea{resize:vertical;min-height:68px;line-height:1.5}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='7'%3E%3Cpath d='M1 1l4.5 4.5L10 1' stroke='%234a5f80' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 11px center;padding-right:34px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+
+/* NEW ITEM FORM */
+.new-form{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r-sm);padding:14px;margin-bottom:14px}
+.new-form-h{font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+
+/* PERSONNEL ROW */
+.p-row{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px;margin-bottom:8px;position:relative}
+.p-row-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.p-name{flex:1;font-size:14px;font-weight:600;color:var(--navy)}
+.p-hc{width:64px;height:44px;text-align:center;font-family:var(--mono);font-size:20px;font-weight:700;padding:6px;border-radius:var(--r-sm);border:1.5px solid var(--border);background:#fff}
+.p-rm{width:26px;height:26px;background:var(--red-pale);border:none;border-radius:50%;color:var(--red);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+
+/* DYN ROWS */
+.dyn-row{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:14px;margin-bottom:10px;position:relative}
+.dyn-num{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--gold);margin-bottom:8px}
+.rm-btn{position:absolute;top:10px;right:10px;width:24px;height:24px;background:var(--red-pale);border:none;border-radius:50%;color:var(--red);font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+
+/* STATUS CHIPS */
+.status-group{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap}
+.s-chip{flex:1;min-width:80px;padding:9px 6px;border-radius:var(--r-sm);border:2px solid var(--border);background:var(--surface);font-size:12px;font-weight:700;color:var(--text2);cursor:pointer;text-align:center;transition:all .15s;user-select:none}
+.s-chip.ok{border-color:var(--green);background:var(--green-pale);color:var(--green)}
+.s-chip.warn{border-color:var(--amber);background:var(--amber-pale);color:var(--amber)}
+.s-chip.bad{border-color:var(--red);background:var(--red-pale);color:var(--red)}
+
+/* REMARK ITEM */
+.rm-item{padding:12px;border:1px solid var(--border);border-radius:var(--r-sm);margin-bottom:8px;position:relative}
+.rm-item.open{border-color:var(--amber);background:var(--amber-pale)}
+.rm-item.closed{border-color:var(--green);background:var(--green-pale)}
+.rm-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;display:inline-block;margin-right:6px}
+.rm-dot.open{background:var(--amber)}
+.rm-dot.closed{background:var(--green)}
+.rm-text{font-size:14px;color:var(--text);line-height:1.5}
+.rm-meta{font-size:11px;color:var(--text3);margin-top:4px}
+.close-btn{display:inline-block;margin-top:6px;font-size:12px;font-weight:700;color:var(--green);cursor:pointer;padding:3px 10px;border:1.5px solid var(--green);border-radius:20px}
+
+/* PRESCRIPTION ITEM */
+.pre-item{padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-sm);margin-bottom:8px;display:flex;align-items:flex-start;gap:10px}
+.pre-num{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--navy);flex-shrink:0}
+.pre-body{flex:1}
+.pre-meta{font-size:12px;color:var(--text3);margin-top:3px}
+
+/* IC ITEM */
+.ic-item{padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-sm);margin-bottom:8px}
+.ic-name{font-size:14px;font-weight:600;color:var(--navy)}
+.ic-meta{font-size:12px;color:var(--text3);margin-top:3px}
+
+/* OC / AC ITEM */
+.oc-item{padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);margin-bottom:8px}
+.oc-stage{font-size:14px;font-weight:600;color:var(--navy)}
+.oc-meta{font-size:12px;color:var(--text3);margin-top:3px;line-height:1.6}
+
+/* KS2 TABLE */
+.ks2-table{width:100%;border-collapse:collapse;font-size:13px}
+.ks2-table th{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;padding:6px 8px;border-bottom:2px solid var(--border);text-align:left}
+.ks2-table td{padding:9px 8px;border-bottom:1px solid var(--surface2);vertical-align:middle}
+.ks2-table tr:last-child td{border-bottom:none}
+.check-yes{color:var(--green);font-weight:700}
+.check-no{color:var(--text3)}
+
+/* PHOTO GRID */
+.photo-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+@media(min-width:480px){.photo-grid{grid-template-columns:repeat(3,1fr)}}
+.photo-thumb{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;position:relative}
+.photo-thumb img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block}
+.photo-cap{padding:6px 10px;border-top:1px solid var(--border);background:#fff}
+.photo-cap input{border:none;padding:0;font-size:12px;color:var(--text3);background:transparent;width:100%;font-family:var(--font)}
+.photo-cap input:focus{outline:none;color:var(--text)}
+.photo-rm{position:absolute;top:6px;right:6px;width:24px;height:24px;background:rgba(200,64,64,.85);border:none;border-radius:50%;color:#fff;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.photo-add-btn{aspect-ratio:4/3;border:2px dashed var(--border);border-radius:var(--r-sm);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;color:var(--text3);font-size:12px;font-weight:600;gap:6px;background:transparent;transition:all .15s;font-family:var(--font)}
+.photo-add-btn:hover{border-color:var(--navy3);color:var(--navy3)}
+.photo-add-btn .cam{font-size:26px}
+
+/* ADD BUTTON */
+.add-btn{width:100%;padding:10px;border:1.5px dashed var(--border);border-radius:var(--r-sm);background:transparent;color:var(--navy3);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;margin-top:4px}
+.add-btn:hover{background:var(--blue-pale);border-color:var(--navy3)}
+
+/* BUTTONS */
+.btn-p{display:inline-flex;align-items:center;gap:6px;padding:10px 18px;border-radius:var(--r-sm);border:none;background:var(--navy);color:#fff;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;transition:all .15s}
+.btn-p:hover{background:var(--navy2)}
+.btn-s{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:var(--r-sm);border:1.5px solid var(--border);background:#fff;color:var(--text2);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer}
+.btn-s:hover{border-color:var(--navy3);color:var(--navy)}
+.btn-sm-inline{padding:5px 12px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);border:1.5px solid var(--border);background:#fff;color:var(--text2)}
+
+/* BOTTOM NAV */
+.bot-nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--border);padding:12px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom));display:flex;gap:10px;z-index:200;box-shadow:0 -4px 20px rgba(13,31,60,.08)}
+.btn-back{flex:0 0 auto;padding:13px 18px;border-radius:var(--r);border:1.5px solid var(--border);background:#fff;color:var(--text2);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer}
+.btn-next{flex:1;padding:13px;border-radius:var(--r);border:none;background:var(--navy);color:#fff;font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
+.btn-next.green{background:var(--green)}
+.btn-next:disabled{background:#aaa;cursor:default}
+
+/* TOAST */
+.toast{position:fixed;top:70px;right:16px;background:var(--navy);color:#fff;padding:10px 16px;border-radius:var(--r-sm);font-size:13px;font-weight:600;z-index:999;opacity:0;transform:translateY(-8px);transition:all .2s;pointer-events:none;max-width:280px;box-shadow:0 4px 16px rgba(0,0,0,.2)}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.ok{background:var(--green)}
+.toast.err{background:var(--red)}
+
+/* EMPTY */
+.empty{text-align:center;padding:28px 16px;color:var(--text3);font-size:13px}
+.empty-ico{font-size:28px;margin-bottom:8px}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-row">
+    <div class="hdr-brand">
+      <div class="hdr-mark">СМ</div>
+      <div>
+        <div class="hdr-title" id="hTitle">Загрузка...</div>
+        <div class="hdr-sub" id="hSub"></div>
+      </div>
+    </div>
+    <div class="hdr-right">
+      <div class="sync-dot" id="syncDot" title="Синхронизировано"></div>
+      <div class="status-pill" id="hStatus">черновик</div>
+      <button class="logout-btn" onclick="logout()">Выход</button>
+    </div>
+  </div>
+  <div class="prog-bar"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
+  <div class="step-nav" id="stepNav"></div>
+</div>
+
+<div class="main" id="main">
+  <div class="empty">Загрузка...</div>
+</div>
+
+<div class="bot-nav">
+  <button class="btn-back" id="btnBack" onclick="goBack()">← Назад</button>
+  <button class="btn-next" id="btnNext" onclick="goNext()">Далее →</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = 'http://localhost:5001';
+
+// ── AUTH ──
+if (!sessionStorage.getItem('userId')) { window.location.href = '/login.html'; }
+const userId = parseInt(sessionStorage.getItem('userId'));
+const userName = sessionStorage.getItem('userName') || 'Инженер';
+const userRole = sessionStorage.getItem('userRole');
+function logout() { sessionStorage.clear(); window.location.href = '/login.html'; }
+
+// ── STATE ──
+const today = new Date();
+const dateStr = today.toISOString().split('T')[0];
+const dateFmt = today.toLocaleDateString('ru-RU', {weekday:'long', day:'numeric', month:'long'});
+
+let S = {
+  objectId: null, reportId: null, report: null, object: null,
+  contractors: [], sections: [], remarks: [], prescriptions: [],
+  inputControl: [], photos: [], meetingId: null,
+  acceptanceControl: [], ks2Check: [], personnel: []
+};
+window._prows = [];
+
+// ── STEPS ──
+const STEPS = [
+  { id:'info',          label:'Объект',      icon:'🏗' },
+  { id:'personnel',     label:'Персонал',    icon:'👷' },
+  { id:'input',         label:'Вх.контроль', icon:'📦' },
+  { id:'operational',   label:'Операц.',     icon:'🔍' },
+  { id:'acceptance',    label:'Приёмочный',  icon:'✅' },
+  { id:'remarks',       label:'Замечания',   icon:'⚠️' },
+  { id:'prescriptions', label:'Предписания', icon:'📋' },
+  { id:'ks2',           label:'ИД/КС-2',     icon:'📑' },
+  { id:'meeting',       label:'Совещание',   icon:'🤝' },
+  { id:'photos',        label:'Фото',        icon:'📷' },
+];
+let currentStep = 0;
+
+function fmtDate(d) {
+  if (!d) return '—';
+  if (/^\d{8}$/.test(d)) return d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6,8);
+  return d;
+}
+
+function toast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 2800);
+}
+
+function setSaving(on) {
+  document.getElementById('syncDot').className = 'sync-dot' + (on ? ' saving' : '');
+}
+
+// ── INIT ──
+async function init() {
+  try {
+    // 1. Load user's objects
+    const objRes = await fetch(`${API}/api/users/${userId}/objects`).then(r => r.json());
+    const userObjs = objRes.data || [];
+
+    if (!userObjs.length) {
+      document.getElementById('main').innerHTML = `<div class="card"><div style="padding:20px;text-align:center;color:var(--red)"><strong>Нет назначенных объектов</strong><br><br>Обратитесь к администратору.</div></div>`;
+      return;
+    }
+
+    // 2. Pick object — always use user's FIRST assigned object, ignore cached objectId
+    // (fix: don't use sessionStorage.objectId blindly)
+    const savedId = parseInt(sessionStorage.getItem('objectId') || '0');
+    const validObj = userObjs.find(o => o.id === savedId) || userObjs[0];
+    S.objectId = validObj.id;
+    sessionStorage.setItem('objectId', S.objectId);
+
+    // 3. If multiple objects — show picker
+    if (userObjs.length > 1 && !sessionStorage.getItem('objectChosen')) {
+      showObjectPicker(userObjs); return;
+    }
+
+    // 4. Load object details + today's report
+    const [objDetail, repList] = await Promise.all([
+      fetch(`${API}/api/objects/${S.objectId}`).then(r => r.json()),
+      fetch(`${API}/api/objects/${S.objectId}/reports`).then(r => r.json()),
+    ]);
+
+    S.object = objDetail.data;
+    S.contractors = S.object.contractors.filter(c => c.is_active);
+    S.sections = S.object.sections.filter(s => s.is_active);
+
+    document.getElementById('hTitle').textContent = S.object.name;
+    document.getElementById('hSub').textContent = userName + ' · ' + dateFmt;
+
+    // 5. Find or create today's report
+    const todayRep = repList.data?.find(r => r.report_date === dateStr && r.user_id === userId);
+    if (todayRep) {
+      S.reportId = todayRep.id;
+      await loadReport();
+    } else {
+      const cr = await fetch(`${API}/api/reports`, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({object_id: S.objectId, user_id: userId, report_date: dateStr})
+      }).then(r => r.json());
+      S.reportId = cr.data.id; S.report = cr.data;
+    }
+
+    // 6. Load meeting defaults from admin settings
+    loadMeetingDefaults();
+
+    // 7. Build nav and show first step
+    buildNav();
+    showStep(0);
+
+  } catch(e) {
+    console.error(e);
+    document.getElementById('main').innerHTML = `<div class="card">
+      <div style="padding:20px;color:var(--red)">
+        <strong>Ошибка подключения к серверу</strong><br><br>
+        Убедитесь что сервер запущен:<br>
+        <code style="background:var(--surface);padding:4px 8px;border-radius:4px;font-family:var(--mono);font-size:13px;display:inline-block;margin-top:6px">python3 app.py</code>
+      </div>
+    </div>`;
+  }
+}
+
+function showObjectPicker(objs) {
+  document.getElementById('main').innerHTML = `
+    <div class="card">
+      <div class="card-h"><div class="ico">🏗</div>Выберите объект</div>
+      ${objs.map(o => `
+        <div onclick="selectObject(${o.id})" style="padding:12px;border:1.5px solid var(--border);border-radius:var(--r-sm);margin-bottom:8px;cursor:pointer;transition:all .15s" 
+             onmouseover="this.style.borderColor='var(--navy3)'" onmouseout="this.style.borderColor='var(--border)'">
+          <div style="font-size:15px;font-weight:700;color:var(--navy)">${o.name}</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:3px">${o.address || ''}</div>
+        </div>`).join('')}
+    </div>`;
+  document.getElementById('btnBack').style.display = 'none';
+  document.getElementById('btnNext').style.display = 'none';
+}
+
+function selectObject(id) {
+  sessionStorage.setItem('objectId', id);
+  sessionStorage.setItem('objectChosen', '1');
+  S.objectId = id;
+  document.getElementById('btnBack').style.display = '';
+  document.getElementById('btnNext').style.display = '';
+  init();
+}
+
+async function loadReport() {
+  const r = await fetch(`${API}/api/reports/${S.reportId}`).then(r => r.json());
+  S.report = r.data;
+  S.remarks = r.data.verbal_remarks || [];
+  S.prescriptions = r.data.prescriptions_log || [];
+  S.inputControl = r.data.input_control || [];
+  S.photos = r.data.photos || [];
+  S.personnel = r.data.personnel || [];
+  S.acceptanceControl = r.data.acceptance_control || [];
+  S.ks2Check = r.data.ks2_check || [];
+  const m = r.data.meetings?.[0];
+  if (m) {
+    S.meetingId = m.id;
+    // Parse stored location: "День | Место"
+    const parts = (m.location || '').split(' | ');
+    const days = ['Понедельник','Вторник','Среда','Четверг','Пятница','Суббота','Воскресенье'];
+    if (days.includes(parts[0])) {
+      document.getElementById('mDay') && (document.getElementById('mDay').value = parts[0]);
+      document.getElementById('mLoc') && (document.getElementById('mLoc').value = parts.slice(1).join(' | '));
+    } else {
+      document.getElementById('mLoc') && (document.getElementById('mLoc').value = m.location || '');
+    }
+    document.getElementById('mTime') && (document.getElementById('mTime').value = m.time || '');
+    document.getElementById('mPart') && (document.getElementById('mPart').value = m.participants || '');
+    document.getElementById('mAgenda') && (document.getElementById('mAgenda').value = m.agenda || '');
+  }
+  updateStatus();
+}
+
+function updateStatus() {
+  const s = S.report?.status || 'draft';
+  const el = document.getElementById('hStatus');
+  el.textContent = s === 'submitted' ? 'сдана' : 'черновик';
+  el.className = 'status-pill' + (s === 'submitted' ? ' submitted' : '');
+  if (s === 'submitted') {
+    document.getElementById('btnNext').disabled = true;
+    document.getElementById('btnNext').textContent = 'Сводка сдана ✓';
+    document.getElementById('btnNext').className = 'btn-next green';
+  }
+}
+
+// ── NAV ──
+function buildNav() {
+  const nav = document.getElementById('stepNav');
+  nav.innerHTML = STEPS.map((s, i) => `
+    <button class="step-pill" id="pill-${i}" onclick="showStep(${i})">${s.label}</button>
+  `).join('');
+}
+
+function updatePills() {
+  STEPS.forEach((s, i) => {
+    const pill = document.getElementById('pill-' + i);
+    if (!pill) return;
+    pill.className = 'step-pill' + (i === currentStep ? ' active' : '');
+    // Count badges
+    let cnt = 0;
+    if (s.id === 'remarks') cnt = S.remarks.filter(r => r.status === 'open').length;
+    if (s.id === 'prescriptions') cnt = S.prescriptions.length;
+    if (s.id === 'input') cnt = S.inputControl.length;
+    if (s.id === 'photos') cnt = S.photos.length;
+    if (s.id === 'personnel') cnt = S.personnel.filter(p => p.headcount > 0).length;
+    if (cnt > 0) pill.innerHTML = s.label + `<span class="cnt">${cnt}</span>`;
+    else pill.textContent = s.label;
+    if (i !== currentStep && cnt > 0) pill.className += ' has-data';
+  });
+  // Progress
+  document.getElementById('progFill').style.width = ((currentStep / (STEPS.length - 1)) * 100) + '%';
+  // Back/Next labels
+  document.getElementById('btnBack').style.display = currentStep === 0 ? 'none' : '';
+  const isLast = currentStep === STEPS.length - 1;
+  const btnNext = document.getElementById('btnNext');
+  if (S.report?.status !== 'submitted') {
+    btnNext.disabled = false;
+    btnNext.className = isLast ? 'btn-next green' : 'btn-next';
+    btnNext.textContent = isLast ? '✓ Сдать сводку' : 'Далее →';
+  }
+}
+
+function showStep(i) {
+  currentStep = i;
+  const step = STEPS[i];
+  document.getElementById('main').innerHTML = renderStep(step.id);
+  // Restore meeting data if navigating back
+  if (step.id === 'meeting') restoreMeetingFields();
+  updatePills();
+  // Scroll nav pill into view
+  const pill = document.getElementById('pill-' + i);
+  pill?.scrollIntoView({behavior:'smooth', block:'nearest', inline:'center'});
+  window.scrollTo(0, 0);
+}
+
+async function goNext() {
+  await autoSave();
+  if (currentStep < STEPS.length - 1) {
+    showStep(currentStep + 1);
+  } else {
+    submitReport();
+  }
+}
+
+function goBack() {
+  if (currentStep > 0) showStep(currentStep - 1);
+}
+
+async function autoSave() {
+  const step = STEPS[currentStep];
+  if (step.id === 'personnel') await saveAllPersonnel();
+  if (step.id === 'meeting') await saveMeeting(true);
+}
+
+// ── RENDER STEPS ──
+function renderStep(id) {
+  switch(id) {
+    case 'info':         return renderInfo();
+    case 'personnel':    return renderPersonnel();
+    case 'input':        return renderInput();
+    case 'operational':  return renderOC();
+    case 'acceptance':   return renderAC();
+    case 'remarks':      return renderRemarks();
+    case 'prescriptions':return renderPrescriptions();
+    case 'ks2':          return renderKS2();
+    case 'meeting':      return renderMeeting();
+    case 'photos':       return renderPhotos();
+    default: return '<div class="empty">Раздел в разработке</div>';
+  }
+}
+
+// ── INFO ──
+function renderInfo() {
+  const o = S.object;
+  return `
+    <div class="step-h">Объект</div>
+    <div class="step-d">Информация об объекте и статус сводки</div>
+    <div class="card">
+      <div class="card-h"><div class="ico">🏗</div>Сводка</div>
+      ${[
+        ['Объект', o.name],
+        ['Адрес', o.address || '—'],
+        ['Заказчик', o.client_name || '—'],
+        ['Договор', o.contract_number || '—'],
+        ['Инженер', userName],
+        ['Дата', dateStr],
+        ['Статус', `<span class="chip ${S.report?.status === 'submitted' ? 'chip-ok' : 'chip-draft'}">${S.report?.status === 'submitted' ? 'Сдана' : 'Черновик'}</span>`],
+      ].map(([l,v]) => `<div class="info-row"><span class="info-lbl">${l}</span><span class="info-val">${v}</span></div>`).join('')}
+    </div>
+    <div class="card">
+      <div class="card-h"><div class="ico">🏢</div>Участки / Секции</div>
+      ${S.sections.map(s => `<div class="info-row"><span class="info-lbl">${s.name}</span><span class="chip chip-active">активен</span></div>`).join('') || '<div class="empty">Нет участков</div>'}
+    </div>
+    <div class="card">
+      <div class="card-h"><div class="ico">👷</div>Подрядчики <span class="count">${S.contractors.length}</span></div>
+      ${S.contractors.map(c => `
+        <div style="padding:8px 0;border-bottom:1px solid var(--surface2)">
+          <div style="font-size:14px;font-weight:600">${c.name}</div>
+          <div style="font-size:12px;color:var(--text3)">${c.work_type || '—'}</div>
+        </div>`).join('')}
+    </div>`;
+}
+
+// ── PERSONNEL ──
+function renderPersonnel() {
+  // Build rows from saved data + unsaved contractors
+  if (!window._prows.length) {
+    if (S.personnel.length > 0) {
+      const saved = S.personnel.map(p => ({...p, saved: true}));
+      const usedIds = new Set(S.personnel.map(p => p.contractor_id));
+      const unsaved = S.contractors.filter(c => !usedIds.has(c.id)).map(c => ({
+        contractor_id: c.id, contractor_name: c.name,
+        section_id: S.sections[0]?.id, headcount: 0, work_description: '', saved: false
+      }));
+      window._prows = [...saved, ...unsaved];
+    } else {
+      window._prows = S.contractors.map(c => ({
+        contractor_id: c.id, contractor_name: c.name,
+        section_id: S.sections[0]?.id, headcount: 0, work_description: '', saved: false
+      }));
+    }
+  }
+  const show = window._prows.filter(r => !r.saved || parseInt(r.headcount) > 0);
+  const hidden = window._prows.filter(r => r.saved && parseInt(r.headcount) === 0);
+  const sectionOpts = S.sections.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+  return `
+    <div class="step-h">Персонал</div>
+    <div class="step-d">Численность и работы по подрядчикам. Строки с 0 не сохраняются.${hidden.length ? ` <span style="color:var(--green)">${hidden.length} скрыто (0 чел.)</span>` : ''}</div>
+    <div class="card">
+      <div class="card-h"><div class="ico">👷</div>Численность</div>
+      ${show.map((row, i) => {
+        const idx = window._prows.indexOf(row);
+        return `<div class="p-row">
+          <div class="p-row-head">
+            <div class="p-name">${row.contractor_name}</div>
+            <input type="number" class="p-hc" value="${row.headcount || ''}" min="0" placeholder="0"
+              onchange="window._prows[${idx}].headcount=parseInt(this.value)||0">
+            <button class="p-rm" onclick="window._prows.splice(${idx},1);showStep(${currentStep})">✕</button>
+          </div>
+          <select style="margin-bottom:8px" onchange="window._prows[${idx}].section_id=this.value">
+            ${S.sections.map(s => `<option value="${s.id}"${row.section_id==s.id?' selected':''}>${s.name}</option>`).join('')}
+          </select>
+          <textarea placeholder="Описание работ за день..." style="min-height:52px;font-size:14px"
+            onblur="window._prows[${idx}].work_description=this.value">${row.work_description || ''}</textarea>
+        </div>`;
+      }).join('')}
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <button class="btn-p btn-sm-inline" onclick="savePersonnelBtn()">💾 Сохранить</button>
+        ${hidden.length ? `<button class="btn-s btn-sm-inline" onclick="window._prows.forEach(r=>r.saved=false);showStep(${currentStep})">Показать все</button>` : ''}
+      </div>
+    </div>`;
+}
+
+async function savePersonnelBtn() {
+  await saveAllPersonnel();
+  toast('Персонал сохранён', 'ok');
+}
+
+async function saveAllPersonnel() {
+  const entries = window._prows.filter(r => parseInt(r.headcount) > 0 || r.work_description).map(r => ({
+    contractor_id: r.contractor_id, section_id: r.section_id,
+    headcount: parseInt(r.headcount) || 0, work_description: r.work_description
+  }));
+  if (!entries.length) return;
+  setSaving(true);
+  await fetch(`${API}/api/reports/${S.reportId}/personnel`, {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(entries)
+  });
+  const r = await fetch(`${API}/api/reports/${S.reportId}`).then(r => r.json());
+  S.personnel = r.data.personnel || [];
+  window._prows = [];
+  setSaving(false);
+  updatePills();
+}
+
+// ── INPUT CONTROL ──
+function renderInput() {
+  return `
+    <div class="step-h">Входной контроль</div>
+    <div class="step-d">Материалы поступившие на объект, проверка документов качества</div>
+    <div class="card">
+      <div class="card-h"><div class="ico">📦</div>Добавить материал</div>
+      <div class="new-form">
+        <div class="row2">
+          <div><label class="fl no-mt">Наименование</label><input id="icMat" placeholder="Бетон М350, арматура..."></div>
+          <div><label class="fl no-mt">Количество</label><input id="icQty" placeholder="15 м³"></div>
+        </div>
+        <div class="row2">
+          <div><label class="fl">Документ о качестве</label><input id="icDoc" placeholder="Паспорт № 123..."></div>
+          <div><label class="fl">Статус</label>
+            <select id="icStatus" onchange="document.getElementById('icDevRow').style.display=this.value?'block':'none'">
+              <option value="">✓ Норма</option>
+              <option value="Отклонение выявлено">⚠ Отклонение</option>
+              <option value="Материал отклонён">✕ Отклонён</option>
+            </select>
+          </div>
+        </div>
+        <div id="icDevRow" style="display:none"><label class="fl">Описание отклонения</label><textarea id="icDev" style="min-height:52px"></textarea></div>
+        <button class="btn-p" style="margin-top:10px" onclick="saveIC()">+ Добавить</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><div class="ico">📋</div>Записи <span class="count">${S.inputControl.length}</span></div>
+      ${S.inputControl.length ? S.inputControl.map(ic => `
+        <div class="ic-item">
+          <div style="display:flex;justify-content:space-between;align-items:start">
+            <div>
+              <div class="ic-name">${ic.material_name}</div>
+              <div class="ic-meta">Кол-во: ${ic.quantity || '—'} · ${ic.document_name || 'без документа'}</div>
+              ${ic.deviation_note
+                ? `<div style="margin-top:4px"><span style="color:var(--red);font-size:12px;font-weight:700">⚠ ${ic.deviation_note}</span></div>`
+                : `<div style="margin-top:4px"><span style="color:var(--green);font-size:12px;font-weight:700">✓ Норма</span></div>`}
+            </div>
+            <button class="p-rm" onclick="deleteIC(${ic.id})">✕</button>
+          </div>
+        </div>`).join('')
+      : '<div class="empty"><div class="empty-ico">📦</div>Нет записей</div>'}
+    </div>`;
+}
+
+async function saveIC() {
+  const mat = document.getElementById('icMat').value.trim();
+  if (!mat) { toast('Укажите наименование', 'err'); return; }
+  setSaving(true);
+  const r = await fetch(`${API}/api/reports/${S.reportId}/input_control`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({material_name: mat, quantity: document.getElementById('icQty').value,
+      document_name: document.getElementById('icDoc').value,
+      deviation_note: document.getElementById('icStatus').value ? document.getElementById('icDev').value : '',
+      engineer_id: userId})
+  }).then(r => r.json());
+  S.inputControl.push(r.data);
+  setSaving(false); toast('Добавлено', 'ok');
+  showStep(currentStep);
+}
+
+async function deleteIC(id) {
+  if (!confirm('Удалить запись?')) return;
+  await fetch(`${API}/api/input_control/${id}`, {method: 'DELETE'});
+  S.inputControl = S.inputControl.filter(i => i.id !== id);
+  showStep(currentStep);
+}
+
+// ── OPERATIONAL CONTROL ──
+function renderOC() {
+  const oc = S.report?.operational_control || [];
+  return `
+    <div class="step-h">Операционный контроль</div>
+    <div class="step-d">Контроль технологии выполнения работ в процессе производства</div>
+    <div class="card">
+      <div class="card-h"><div class="ico">🔍</div>Добавить запись</div>
+      <div class="new-form">
+        <label class="fl no-mt">Этап работ</label><input id="ocStage" placeholder="Армирование колонн, бетонирование перекрытия...">
+        <div class="row2">
+          <div><label class="fl">Контролируемые операции</label><textarea id="ocOps" style="min-height:52px" placeholder="Шаг армирования, диаметр..."></textarea></div>
+          <div><label class="fl">Метод и объём контроля</label><textarea id="ocMethod" style="min-height:52px" placeholder="Визуальный, измерительный..."></textarea></div>
+        </div>
+        <label class="fl">Участок / секция</label><select id="ocSection">${S.sections.map(s=>`<option value="${s.id}">${s.name}</option>`).join('')}</select>
+        <button class="btn-p" style="margin-top:10px" onclick="saveOC()">+ Добавить</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><div class="ico">📋</div>Записи <span class="count">${oc.length}</span></div>
+      ${oc.length ? oc.map(o => `
+        <div class="oc-item">
+          <div style="display:flex;justify-content:space-between">
+            <div class="oc-stage">${o.work_stage}</div>
+            <button class="p-rm" onclick="deleteOC(${o.id})">✕</button>
+          </div>
+          <div class="oc-meta">${o.section_name || ''}<br>Операции: ${o.controlled_operations || '—'}<br>Метод: ${o.control_method || '—'}</div>
+        </div>`).join('')
+      : '<div class="empty"><div class="empty-ico">🔍</div>Нет записей</div>'}
+    </div>`;
+}
+
+async function saveOC() {
+  const stage = document.getElementById('ocStage').value.trim();
+  if (!stage) { toast('Укажите этап работ', 'err'); return; }
+  setSaving(true);
+  await fetch(`${API}/api/reports/${S.reportId}/operational_control`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({work_stage: stage, controlled_operations: document.getElementById('ocOps').value,
+      control_method: document.getElementById('ocMethod').value,
+      section_id: document.getElementById('ocSection').value, engineer_id: userId})
+  });
+  const r = await fetch(`${API}/api/reports/${S.reportId}`).then(r => r.json());
+  if (S.report) S.report.operational_control = r.data.operational_control;
+  setSaving(false); toast('Сохранено', 'ok'); showStep(currentStep);
+}
+
+async function deleteOC(id) {
+  await fetch(`${API}/api/operational_control/${id}`, {method: 'DELETE'});
+  if (S.report) S.report.operational_control = (S.report.operational_control || []).filter(o => o.id !== id);
+  showStep(currentStep);
+}
+
+// ── ACCEPTANCE CONTROL ──
+function renderAC() {
+  return `
+    <div class="step-h">Приёмочный контроль</div>
+    <div class="step-d">Освидетельствование скрытых работ, приёмка конструкций</div>
+    <div class="card">
+      <div class="card-h"><div class="ico">✅</div>Добавить запись</div>
+      <div class="new-form">
+        <label class="fl no-mt">Этап / вид работ</label><input id="acStage" placeholder="Приёмка свайного поля, освидетельствование арматуры...">
+        <div class="row2">
+          <div><label class="fl">Контролируемые операции</label><textarea id="acOps" style="min-height:52px" placeholder="Проверка глубины погружения, соответствие проекту..."></textarea></div>
+          <div><label class="fl">Метод и объём контроля</label><textarea id="acMethod" style="min-height:52px" placeholder="Визуальный, инструментальный..."></textarea></div>
+        </div>
+        <label class="fl">Участок / секция</label><select id="acSection">${S.sections.map(s=>`<option value="${s.id}">${s.name}</option>`).join('')}</select>
+        <button class="btn-p" style="margin-top:10px" onclick="saveAC()">+ Добавить</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><div class="ico">📋</div>Записи <span class="count">${S.acceptanceControl.length}</span></div>
+      ${S.acceptanceControl.length ? S.acceptanceControl.map(o => `
+        <div class="oc-item">
+          <div style="display:flex;justify-content:space-between">
+            <div class="oc-stage">${o.work_stage}</div>
+            <button class="p-rm" onclick="deleteAC(${o.id})">✕</button>
+          </div>
+          <div class="oc-meta">${o.section_name || ''}<br>Операции: ${o.controlled_operations || '—'}<br>Метод: ${o.control_method || '—'}</div>
+        </div>`).join('')
+      : '<div class="empty"><div class="empty-ico">✅</div>Нет записей</div>'}
+    </div>`;
+}
+
+async function saveAC() {
+  const stage = document.getElementById('acStage').value.trim();
+  if (!stage) { toast('Укажите этап работ', 'err'); return; }
+  setSaving(true);
+  const r = await fetch(`${API}/api/reports/${S.reportId}/acceptance_control`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({work_stage: stage, controlled_operations: document.getElementById('acOps').value,
+      control_method: document.getElementById('acMethod').value,
+      section_id: document.getElementById('acSection').value, engineer_id: userId})
+  }).then(r => r.json());
+  S.acceptanceControl.push(r.data);
+  setSaving(false); toast('Сохранено', 'ok'); showStep(currentStep);
+}
+
+async function deleteAC(id) {
+  await fetch(`${API}/api/acceptance_control/${id}`, {method: 'DELETE'});
+  S.acceptanceControl = S.acceptanceControl.filter(o => o.id !== id);
+  showStep(currentStep);
+}
+
+// ── REMARKS ──
+function renderRemarks() {
+  const open = S.remarks.filter(r => r.status === 'open').length;
+  return `
+    <div class="step-h">Замечания</div>
+    <div class="step-d">Устные замечания по результатам обхода${open > 0 ? ` · <span style="color:var(--red);font-weight:700">${open} открытых</span>` : ''}</div>
+    <div class="card">
+      <div class="card-h"><div class="ico">⚠️</div>Новое замечание</div>
+      <div class="new-form">
+        <label class="fl no-mt">Описание замечания</label>
+        <textarea id="rmDesc" style="min-height:68px" placeholder="Опишите выявленное нарушение..."></textarea>
+        <div class="row2">
+          <div><label class="fl">Участок / секция</label><select id="rmSection">${S.sections.map(s=>`<option value="${s.id}">${s.name}</option>`).join('')}</select></div>
+          <div><label class="fl">Срок устранения</label><input type="date" id="rmDeadline"></div>
+        </div>
+        <button class="btn-p" style="margin-top:10px" onclick="saveRemark()">+ Добавить замечание</button>
+      </div>
+    </div>
+    ${S.remarks.length ? `<div class="card">
+      <div class="card-h"><div class="ico">📋</div>Замечания <span class="count">${S.remarks.length}</span></div>
+      ${S.remarks.map(r => `
+        <div class="rm-item ${r.status}">
+          <div style="display:flex;align-items:start;justify-content:space-between">
+            <div style="flex:1">
+              <div class="rm-text"><span class="rm-dot ${r.status}"></span>${r.description}</div>
+              <div class="rm-meta">${r.section_name || ''}${r.deadline ? ' · срок: ' + fmtDate(r.deadline) : ''}</div>
+              ${r.status === 'open' ? `<div class="close-btn" onclick="closeRemark(${r.id})">✓ Закрыть</div>` : `<div style="font-size:12px;color:var(--green);margin-top:4px;font-weight:600">Закрыто ${fmtDate(r.closed_at)}${r.closed_note ? ' · ' + r.closed_note : ''}</div>`}
+            </div>
+            <button class="p-rm" style="flex-shrink:0" onclick="deleteRemark(${r.id})">✕</button>
+          </div>
+        </div>`).join('')}
+    </div>` : ''}`;
+}
+
+async function saveRemark() {
+  const desc = document.getElementById('rmDesc').value.trim();
+  if (!desc) { toast('Опишите замечание', 'err'); return; }
+  setSaving(true);
+  const r = await fetch(`${API}/api/reports/${S.reportId}/remarks`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({description: desc, section_id: document.getElementById('rmSection').value,
+      deadline: document.getElementById('rmDeadline').value || null, issued_by: userId})
+  }).then(r => r.json());
+  S.remarks.push(r.data);
+  setSaving(false); toast('Замечание добавлено', 'ok'); showStep(currentStep);
+}
+
+function closeRemark(id) {
+  const note = prompt('Примечание при закрытии:') || '';
+  fetch(`${API}/api/remarks/${id}/close`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({closed_note:note})})
+  .then(() => { const r = S.remarks.find(r => r.id === id); if(r) { r.status='closed'; r.closed_at=dateStr; r.closed_note=note; } showStep(currentStep); toast('Закрыто','ok'); });
+}
+
+function deleteRemark(id) {
+  if (!confirm('Удалить замечание?')) return;
+  fetch(`${API}/api/remarks/${id}`, {method:'DELETE'}).then(() => { S.remarks = S.remarks.filter(r=>r.id!==id); showStep(currentStep); });
+}
+
+// ── PRESCRIPTIONS ──
+function renderPrescriptions() {
+  return `
+    <div class="step-h">Предписания</div>
+    <div class="step-d">Ссылки на предписания из TeamJect</div>
+    <div class="card">
+      <div class="card-h"><div class="ico">📋</div>Добавить предписание</div>
+      <div class="new-form">
+        <div class="row3">
+          <div><label class="fl no-mt">Номер</label><input id="preNum" placeholder="№ 26"></div>
+          <div><label class="fl no-mt">Дата выдачи</label><input type="date" id="preDate"></div>
+          <div><label class="fl no-mt">Срок</label><input type="date" id="preDeadline"></div>
+        </div>
+        <div class="row2">
+          <div><label class="fl">Участок</label><select id="preSection">${S.sections.map(s=>`<option value="${s.id}">${s.name}</option>`).join('')}</select></div>
+          <div><label class="fl">Статус</label>
+            <select id="preStatus">
+              <option>Выдано</option><option>На подписании</option>
+              <option>Выполнено</option><option>Просрочено</option><option>Черновик</option>
+            </select>
+          </div>
+        </div>
+        <label class="fl">ID в TeamJect</label><input id="preTjId" placeholder="Для будущей интеграции">
+        <button class="btn-p" style="margin-top:10px" onclick="savePrescription()">+ Добавить</button>
+      </div>
+    </div>
+    ${S.prescriptions.length ? `<div class="card">
+      <div class="card-h"><div class="ico">📑</div>Предписания <span class="count">${S.prescriptions.length}</span></div>
+      ${S.prescriptions.map(p => `
+        <div class="pre-item">
+          <div class="pre-num">${p.number || '—'}</div>
+          <div class="pre-body">
+            <div style="font-size:13px;font-weight:600">${p.status || '—'}</div>
+            <div class="pre-meta">Выдано: ${fmtDate(p.issue_date)} · Срок: ${fmtDate(p.deadline)} · ${p.section_name || '—'}</div>
+            ${p.tj_prescription_id ? `<div style="font-size:11px;color:var(--text3);font-family:var(--mono)">TJ: ${p.tj_prescription_id}</div>` : ''}
+          </div>
+          <button class="p-rm" onclick="deletePre(${p.id})">✕</button>
+        </div>`).join('')}
+    </div>` : ''}`;
+}
+
+async function savePrescription() {
+  const num = document.getElementById('preNum').value.trim();
+  if (!num) { toast('Укажите номер', 'err'); return; }
+  setSaving(true);
+  await fetch(`${API}/api/reports/${S.reportId}/prescriptions`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({number: num, issue_date: document.getElementById('preDate').value || dateStr,
+      deadline: document.getElementById('preDeadline').value || null,
+      status: document.getElementById('preStatus').value,
+      section_id: document.getElementById('preSection').value,
+      tj_prescription_id: document.getElementById('preTjId').value || null})
+  });
+  const r = await fetch(`${API}/api/reports/${S.reportId}`).then(r => r.json());
+  S.prescriptions = r.data.prescriptions_log || [];
+  setSaving(false); toast('Добавлено', 'ok'); showStep(currentStep);
+}
+
+async function deletePre(id) {
+  await fetch(`${API}/api/prescriptions/${id}`, {method:'DELETE'});
+  S.prescriptions = S.prescriptions.filter(p => p.id !== id);
+  showStep(currentStep);
+}
+
+// ── KS2 ──
+function renderKS2() {
+  return `
+    <div class="step-h">ИД / КС-2</div>
+    <div class="step-d">Проверка исполнительной документации и актов КС-2</div>
+    <div class="card">
+      <div class="card-h"><div class="ico">📑</div>Добавить запись</div>
+      <div class="new-form">
+        <div class="row2">
+          <div><label class="fl no-mt">Подрядная организация</label><input id="ks2Con" placeholder="ООО «Фортес»"></div>
+          <div><label class="fl no-mt">Вид работ / объект</label><input id="ks2Work" placeholder="Погружение свай, секция 3"></div>
+        </div>
+        <div class="row2">
+          <div><label class="fl">Номер акта КС-2</label><input id="ks2Num" placeholder="№ 15"></div>
+          <div>
+            <label class="fl">Наличие документов</label>
+            <div style="display:flex;gap:16px;padding:10px 0">
+              <label style="display:flex;align-items:center;gap:6px;font-size:14px;font-weight:600;cursor:pointer">
+                <input type="checkbox" id="ks2Ks6a" style="width:18px;height:18px;cursor:pointer"> КС-6а
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;font-size:14px;font-weight:600;cursor:pointer">
+                <input type="checkbox" id="ks2Id" style="width:18px;height:18px;cursor:pointer"> ИД
+              </label>
+            </div>
+          </div>
+        </div>
+        <button class="btn-p" onclick="saveKS2()">+ Добавить</button>
+      </div>
+    </div>
+    ${S.ks2Check.length ? `<div class="card">
+      <div class="card-h"><div class="ico">📋</div>Записи <span class="count">${S.ks2Check.length}</span></div>
+      <table class="ks2-table">
+        <tr><th>Организация</th><th>Вид работ</th><th>КС-2</th><th>КС-6а</th><th>ИД</th><th></th></tr>
+        ${S.ks2Check.map(k => `<tr>
+          <td>${k.contractor_name || '—'}</td>
+          <td>${k.object_work || '—'}</td>
+          <td style="font-family:var(--mono);font-size:12px">${k.ks2_number || '—'}</td>
+          <td class="${k.has_ks6a ? 'check-yes' : 'check-no'}">${k.has_ks6a ? '✓' : '—'}</td>
+          <td class="${k.has_id ? 'check-yes' : 'check-no'}">${k.has_id ? '✓' : '—'}</td>
+          <td><button class="p-rm" onclick="deleteKS2(${k.id})">✕</button></td>
+        </tr>`).join('')}
+      </table>
+    </div>` : ''}`;
+}
+
+async function saveKS2() {
+  const c = document.getElementById('ks2Con').value.trim();
+  if (!c) { toast('Укажите организацию', 'err'); return; }
+  setSaving(true);
+  const r = await fetch(`${API}/api/reports/${S.reportId}/ks2_check`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({contractor_name: c, object_work: document.getElementById('ks2Work').value,
+      ks2_number: document.getElementById('ks2Num').value,
+      has_ks6a: document.getElementById('ks2Ks6a').checked,
+      has_id: document.getElementById('ks2Id').checked, engineer_id: userId})
+  }).then(r => r.json());
+  S.ks2Check.push(r.data);
+  setSaving(false); toast('Добавлено', 'ok'); showStep(currentStep);
+}
+
+async function deleteKS2(id) {
+  await fetch(`${API}/api/ks2_check/${id}`, {method:'DELETE'});
+  S.ks2Check = S.ks2Check.filter(k => k.id !== id);
+  showStep(currentStep);
+}
+
+// ── MEETING ──
+let _meetingData = {day:'', loc:'', time:'', part:'', agenda:''};
+
+function loadMeetingDefaults() {
+  const d = JSON.parse(localStorage.getItem('meetingDefaults') || '{}');
+  _meetingData.loc = _meetingData.loc || d.location || '';
+  _meetingData.time = _meetingData.time || d.time || '';
+  _meetingData.part = _meetingData.part || d.participants || '';
+  _meetingData.day = _meetingData.day || d.day || '';
+}
+
+function renderMeeting() {
+  return `
+    <div class="step-h">Совещание</div>
+    <div class="step-d">Еженедельное совещание на объекте</div>
+    <div class="card">
+      <div class="card-h"><div class="ico">🤝</div>Данные совещания</div>
+      <div class="row2">
+        <div><label class="fl no-mt">День недели</label>
+          <select id="mDay">
+            <option value="">— не проводилось —</option>
+            <option ${_meetingData.day==='Понедельник'?'selected':''}>Понедельник</option>
+            <option ${_meetingData.day==='Вторник'?'selected':''}>Вторник</option>
+            <option ${_meetingData.day==='Среда'?'selected':''}>Среда</option>
+            <option ${_meetingData.day==='Четверг'?'selected':''}>Четверг</option>
+            <option ${_meetingData.day==='Пятница'?'selected':''}>Пятница</option>
+            <option ${_meetingData.day==='Суббота'?'selected':''}>Суббота</option>
+          </select>
+        </div>
+        <div><label class="fl no-mt">Время начала</label><input type="time" id="mTime" value="${_meetingData.time}"></div>
+      </div>
+      <label class="fl">Место проведения</label><input id="mLoc" value="${_meetingData.loc}" placeholder="Строительная площадка...">
+      <label class="fl">Участники</label>
+      <textarea id="mPart" style="min-height:80px" placeholder="Глуховской А.К. — инженер СК&#10;Иванов И.И. — прораб...">${_meetingData.part}</textarea>
+      <label class="fl">Тематика / повестка</label>
+      <textarea id="mAgenda" style="min-height:68px" placeholder="Вопросы рассмотренные на совещании...">${_meetingData.agenda}</textarea>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn-p" onclick="saveMeeting(false)">💾 Сохранить</button>
+        <button class="btn-s" onclick="clearMeeting()">Очистить</button>
+      </div>
+    </div>`;
+}
+
+function restoreMeetingFields() {
+  // Called after renderStep — fields exist now
+  setTimeout(() => {
+    const mLoc = document.getElementById('mLoc');
+    const mTime = document.getElementById('mTime');
+    const mPart = document.getElementById('mPart');
+    const mAgenda = document.getElementById('mAgenda');
+    const mDay = document.getElementById('mDay');
+    if (mLoc) mLoc.value = _meetingData.loc;
+    if (mTime) mTime.value = _meetingData.time;
+    if (mPart) mPart.value = _meetingData.part;
+    if (mAgenda) mAgenda.value = _meetingData.agenda;
+    if (mDay) mDay.value = _meetingData.day;
+  }, 0);
+}
+
+async function saveMeeting(silent=false) {
+  const day = document.getElementById('mDay')?.value || '';
+  const loc = document.getElementById('mLoc')?.value || '';
+  const time = document.getElementById('mTime')?.value || '';
+  const part = document.getElementById('mPart')?.value || '';
+  const agenda = document.getElementById('mAgenda')?.value || '';
+  // Save to in-memory state so it persists between steps
+  _meetingData = {day, loc, time, part, agenda};
+  const location = day ? (day + (loc ? ' | ' + loc : '')) : loc;
+  if (!location && !part) return;
+  setSaving(true);
+  const data = {location, time, participants: part, agenda, engineer_id: userId};
+  if (S.meetingId) {
+    await fetch(`${API}/api/meetings/${S.meetingId}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+  } else {
+    const r = await fetch(`${API}/api/reports/${S.reportId}/meetings`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)}).then(r => r.json());
+    S.meetingId = r.data.id;
+  }
+  setSaving(false);
+  if (!silent) toast('Совещание сохранено', 'ok');
+}
+
+function clearMeeting() {
+  _meetingData = {day:'', loc:'', time:'', part:'', agenda:''};
+  ['mDay','mLoc','mTime','mPart','mAgenda'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+}
+
+// ── PHOTOS ──
+function renderPhotos() {
+  return `
+    <div class="step-h">Фотофиксация</div>
+    <div class="step-d">Общая обстановка на объекте${S.photos.length ? ` · ${S.photos.length} фото` : ''}</div>
+    <div class="card">
+      <div class="photo-grid" id="photoGrid">
+        ${S.photos.map(p => `
+          <div class="photo-thumb">
+            <img src="${API}/uploads/${p.file_path}" alt="">
+            <button class="photo-rm" onclick="removePhoto(${p.id}, this.closest('.photo-thumb'))">✕</button>
+            <div class="photo-cap"><input placeholder="Подпись..." value="${(p.caption||'').replace(/"/g,'&quot;')}" onblur="updateCaption(${p.id}, this.value)"></div>
+          </div>`).join('')}
+        <label class="photo-add-btn">
+          <div class="cam">📷</div>
+          Добавить фото
+          <input type="file" accept="image/*" multiple style="display:none" onchange="handlePhotos(event)">
+        </label>
+      </div>
+      <p style="font-size:12px;color:var(--text3);margin-top:12px;line-height:1.6">
+        Нажмите 📷 чтобы загрузить фото с камеры или галереи.<br>Подпись редактируется под каждым снимком.
+      </p>
+    </div>`;
+}
+
+async function handlePhotos(e) {
+  const files = Array.from(e.target.files);
+  setSaving(true);
+  for (const file of files) {
+    const fd = new FormData(); fd.append('file', file);
+    const r = await fetch(`${API}/api/reports/${S.reportId}/photos`, {method:'POST', body:fd}).then(r => r.json());
+    if (r.ok) S.photos.push(r.data);
+  }
+  setSaving(false); toast(`Загружено ${files.length} фото`, 'ok');
+  showStep(currentStep); e.target.value = '';
+}
+
+function updateCaption(id, caption) {
+  fetch(`${API}/api/photos/${id}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({caption})});
+}
+
+async function removePhoto(id, el) {
+  if (!confirm('Удалить фото?')) return;
+  await fetch(`${API}/api/photos/${id}`, {method:'DELETE'});
+  S.photos = S.photos.filter(p => p.id !== id);
+  el.remove(); updatePills();
+}
+
+// ── SUBMIT ──
+async function submitReport() {
+  if (S.report?.status === 'submitted') { toast('Сводка уже сдана', 'ok'); return; }
+  if (!confirm('Сдать сводку? После сдачи редактирование будет ограничено.')) return;
+  setSaving(true);
+  await fetch(`${API}/api/reports/${S.reportId}/submit`, {method:'POST'});
+  S.report.status = 'submitted';
+  setSaving(false);
+  updateStatus(); updatePills();
+  toast('Сводка сдана! ✓', 'ok');
+}
+
+// ── START ──
+init();
+</script>
+</body>
+</html>

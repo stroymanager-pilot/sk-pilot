@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Сводка СК</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f5f4f0; --surface: #ffffff; --border: #e0ddd6; --border-strong: #c8c4bb;
+  --text: #1a1916; --text-muted: #7a7870; --accent: #d4380d; --accent-light: #fff1ec;
+  --green: #389e0d; --green-light: #f6ffed; --yellow: #d48806; --yellow-light: #fffbe6;
+  --radius: 4px; --mono: 'IBM Plex Mono', monospace; --sans: 'IBM Plex Sans', sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--sans); background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; min-height: 100vh; }
+.header { background: var(--text); color: white; padding: 12px 16px; position: sticky; top: 0; z-index: 100; display: flex; align-items: center; gap: 12px; }
+.header-logo { font-family: var(--mono); font-size: 11px; letter-spacing: 0.15em; color: #aaa; }
+.header-title { font-size: 13px; font-weight: 500; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.header-date { font-family: var(--mono); font-size: 11px; color: #aaa; white-space: nowrap; }
+.header-status { font-family: var(--mono); font-size: 10px; padding: 2px 7px; border-radius: 2px; background: #333; color: #aaa; white-space: nowrap; }
+.header-status.submitted { background: var(--green); color: white; }
+.nav { background: var(--surface); border-bottom: 1px solid var(--border); display: flex; overflow-x: auto; scrollbar-width: none; position: sticky; top: 45px; z-index: 99; }
+.nav::-webkit-scrollbar { display: none; }
+.nav-item { padding: 10px 14px; font-size: 12px; font-family: var(--mono); color: var(--text-muted); white-space: nowrap; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; flex-shrink: 0; }
+.nav-item:hover { color: var(--text); }
+.nav-item.active { color: var(--accent); border-bottom-color: var(--accent); }
+.nav-badge { background: var(--accent); color: white; font-size: 9px; padding: 1px 4px; border-radius: 2px; margin-left: 4px; }
+.main { padding: 16px; max-width: 680px; margin: 0 auto; padding-bottom: 70px; }
+.section { display: none; }
+.section.active { display: block; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 12px; overflow: hidden; }
+.card-header { padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: #fafaf8; }
+.card-title { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
+.card-body { padding: 14px; }
+label { display: block; font-size: 11px; font-family: var(--mono); color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+input, textarea, select { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); font-family: var(--sans); font-size: 13px; color: var(--text); background: var(--surface); transition: border-color 0.15s; outline: none; -webkit-appearance: none; }
+input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+textarea { resize: vertical; min-height: 72px; }
+.form-row { margin-bottom: 12px; }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: var(--radius); font-size: 13px; font-family: var(--sans); font-weight: 500; cursor: pointer; border: none; transition: all 0.15s; }
+.btn-primary { background: var(--accent); color: white; }
+.btn-primary:hover { background: #b52b00; }
+.btn-primary:disabled { background: var(--green); cursor: default; }
+.btn-ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
+.btn-ghost:hover { border-color: var(--border-strong); color: var(--text); }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn-icon { padding: 6px 8px; background: transparent; border: 1px solid var(--border); color: var(--text-muted); cursor: pointer; border-radius: var(--radius); font-size: 12px; }
+.btn-icon:hover { border-color: var(--border-strong); color: var(--accent); }
+.personnel-row { display: grid; grid-template-columns: 1fr 90px 36px; gap: 8px; align-items: start; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.personnel-row:last-child { border-bottom: none; }
+.headcount-input { text-align: center; font-family: var(--mono); font-size: 18px; font-weight: 500; padding: 6px; }
+.remark-item { padding: 10px 0; border-bottom: 1px solid var(--border); display: flex; gap: 10px; align-items: flex-start; }
+.remark-item:last-child { border-bottom: none; }
+.remark-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+.remark-dot.open { background: var(--accent); }
+.remark-dot.closed { background: var(--green); }
+.remark-close-btn { display: inline-block; font-size: 11px; color: var(--green); cursor: pointer; padding: 2px 6px; border: 1px solid var(--green); border-radius: 2px; margin-top: 4px; }
+.photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.photo-thumb { position: relative; aspect-ratio: 1; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.photo-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.photo-caption-input { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.6); border: none; color: white; font-size: 10px; padding: 3px 5px; font-family: var(--sans); }
+.photo-caption-input::placeholder { color: rgba(255,255,255,0.5); }
+.photo-remove { position: absolute; top: 3px; right: 3px; background: rgba(0,0,0,0.5); color: white; border: none; border-radius: 2px; width: 18px; height: 18px; font-size: 10px; cursor: pointer; }
+.photo-add { aspect-ratio: 1; border: 1.5px dashed var(--border-strong); border-radius: var(--radius); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; color: var(--text-muted); font-size: 11px; gap: 6px; background: transparent; transition: all 0.15s; font-family: var(--mono); }
+.photo-add:hover { border-color: var(--accent); color: var(--accent); }
+.tag { display: inline-block; font-size: 10px; font-family: var(--mono); padding: 2px 6px; border-radius: 2px; }
+.tag-open { background: var(--accent-light); color: var(--accent); }
+.tag-closed { background: var(--green-light); color: var(--green); }
+.tag-draft { background: var(--yellow-light); color: var(--yellow); }
+.tag-submitted { background: var(--green-light); color: var(--green); }
+.table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.table th { font-family: var(--mono); font-size: 10px; text-transform: uppercase; color: var(--text-muted); padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border); background: #fafaf8; }
+.table td { padding: 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.table tr:last-child td { border-bottom: none; }
+.empty { text-align: center; padding: 28px 16px; color: var(--text-muted); }
+.empty-icon { font-size: 24px; margin-bottom: 6px; }
+.empty-text { font-size: 12px; font-family: var(--mono); }
+.submit-bar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-top: 1px solid var(--border); padding: 12px 16px; display: flex; gap: 10px; align-items: center; z-index: 100; }
+.submit-bar-info { flex: 1; font-size: 11px; color: var(--text-muted); font-family: var(--mono); }
+.loading { text-align: center; padding: 40px; color: var(--text-muted); font-family: var(--mono); font-size: 12px; }
+.toast { position: fixed; top: 60px; right: 16px; background: var(--text); color: white; padding: 10px 16px; border-radius: var(--radius); font-size: 13px; z-index: 999; opacity: 0; transform: translateY(-8px); transition: all 0.2s; pointer-events: none; max-width: 280px; }
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast.success { background: var(--green); }
+.toast.error { background: var(--accent); }
+.info-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--border); font-size: 13px; gap: 12px; }
+.info-row:last-child { border-bottom: none; }
+.info-label { color: var(--text-muted); font-size: 12px; flex-shrink: 0; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <span class="header-logo">СК</span>
+  <span class="header-title" id="headerTitle">Загрузка...</span>
+  <span class="header-date" id="headerDate"></span>
+  <span class="header-status" id="headerStatus">черновик</span>
+</div>
+
+<div class="nav">
+  <div class="nav-item active" data-section="info">Объект</div>
+  <div class="nav-item" data-section="personnel">Персонал</div>
+  <div class="nav-item" data-section="input">Вх. контроль</div>
+  <div class="nav-item" data-section="operational">Операц.</div>
+  <div class="nav-item" data-section="remarks">Замечания <span class="nav-badge" id="remarksBadge" style="display:none">0</span></div>
+  <div class="nav-item" data-section="prescriptions">Предписания</div>
+  <div class="nav-item" data-section="meeting">Совещание</div>
+  <div class="nav-item" data-section="photos">Фото</div>
+</div>
+
+<div class="main">
+
+  <div class="section active" id="section-info"><div class="loading">Загрузка...</div></div>
+
+  <div class="section" id="section-personnel">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Численность по корпусам</span>
+        <button class="btn btn-ghost btn-sm" onclick="addPersonnelRow()">+ строку</button>
+      </div>
+      <div class="card-body" id="personnelList"><div class="loading">Загрузка...</div></div>
+    </div>
+  </div>
+
+  <div class="section" id="section-input">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Входной контроль материалов</span>
+        <button class="btn btn-ghost btn-sm" onclick="addInputControl()">+ Добавить</button>
+      </div>
+      <div class="card-body" id="inputControlList">
+        <div class="empty"><div class="empty-icon">📦</div><div class="empty-text">нет записей</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section" id="section-operational">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Операционный контроль</span>
+        <button class="btn btn-ghost btn-sm" onclick="addOperationalControl()">+ Добавить</button>
+      </div>
+      <div class="card-body" id="operationalList">
+        <div class="empty"><div class="empty-icon">📋</div><div class="empty-text">нет записей</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section" id="section-remarks">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Устные замечания</span>
+        <button class="btn btn-ghost btn-sm" onclick="addRemark()">+ Замечание</button>
+      </div>
+      <div class="card-body" id="remarksList">
+        <div class="empty"><div class="empty-icon">✓</div><div class="empty-text">замечаний нет</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section" id="section-prescriptions">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Предписания (ссылки на TeamJect)</span>
+        <button class="btn btn-ghost btn-sm" onclick="addPrescription()">+ Добавить</button>
+      </div>
+      <div class="card-body" style="padding:0" id="prescriptionsList">
+        <div class="empty" style="padding:24px"><div class="empty-icon">📄</div><div class="empty-text">предписаний нет</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section" id="section-meeting">
+    <div class="card">
+      <div class="card-header"><span class="card-title">Совещание</span></div>
+      <div class="card-body">
+        <div class="form-row"><label>Место проведения</label>
+          <input type="text" id="meetingLocation" placeholder="Строительная площадка, прорабская..."></div>
+        <div class="form-row"><label>Время</label>
+          <input type="time" id="meetingTime"></div>
+        <div class="form-row"><label>Участники</label>
+          <textarea id="meetingParticipants" placeholder="Глуховской А.К. — инженер СК&#10;Иванов И.И. — прораб ООО «Пинстрой»"></textarea></div>
+        <div class="form-row"><label>Тематика / повестка</label>
+          <textarea id="meetingAgenda" placeholder="Вопросы рассмотренные на совещании..."></textarea></div>
+        <div style="display:flex; gap:8px">
+          <button class="btn btn-primary btn-sm" onclick="saveMeeting()">Сохранить</button>
+          <button class="btn btn-ghost btn-sm" onclick="clearMeeting()">Очистить</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section" id="section-photos">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Фотофиксация</span>
+        <span id="photoCount" style="font-family:var(--mono); font-size:11px; color:var(--text-muted)"></span>
+      </div>
+      <div class="card-body">
+        <div class="photo-grid" id="photoGrid">
+          <label class="photo-add">
+            <span style="font-size:24px">+</span>
+            Добавить фото
+            <input type="file" accept="image/*" multiple style="display:none" id="photoInput" onchange="handlePhotoUpload(event)">
+          </label>
+        </div>
+        <p style="font-size:11px; color:var(--text-muted); margin-top:10px; font-family:var(--mono)">
+          Нажмите + чтобы добавить фото. Подпись редактируется прямо на фото.
+        </p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="submit-bar">
+  <div class="submit-bar-info" id="submitInfo">черновик</div>
+  <button class="btn btn-ghost btn-sm" onclick="saveDraft()">Сохранить</button>
+  <button class="btn btn-primary btn-sm" id="submitBtn" onclick="submitReport()">Сдать сводку</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = 'http://localhost:5001';
+const today = new Date();
+const dateStr = today.toISOString().split('T')[0];
+document.getElementById('headerDate').textContent = today.toLocaleDateString('ru-RU',{day:'numeric',month:'long'});
+
+let state = { objectId:1, userId:1, reportId:null, report:null, object:null,
+  personnel:[], contractors:[], sections:[], remarks:[], prescriptions:[], inputControl:[], photos:[], meetingId:null };
+window._prows = [];
+
+function toast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast show '+(type||'');
+  setTimeout(()=>t.className='toast', 2800);
+}
+
+document.querySelectorAll('.nav-item').forEach(item=>{
+  item.addEventListener('click',()=>{
+    document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));
+    document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+    item.classList.add('active');
+    document.getElementById('section-'+item.dataset.section).classList.add('active');
+  });
+});
+
+async function init() {
+  try {
+    const [objRes, repRes] = await Promise.all([
+      fetch(`${API}/api/objects/${state.objectId}`).then(r=>r.json()),
+      fetch(`${API}/api/objects/${state.objectId}/reports`).then(r=>r.json()),
+    ]);
+    state.object = objRes.data;
+    state.contractors = state.object.contractors;
+    state.sections = state.object.sections;
+    document.getElementById('headerTitle').textContent = state.object.name;
+    const todayReport = repRes.data?.find(r=>r.report_date===dateStr && r.user_id===state.userId);
+    if (todayReport) { state.reportId = todayReport.id; await loadReport(); }
+    else {
+      const cr = await fetch(`${API}/api/reports`,{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({object_id:state.objectId,user_id:state.userId,report_date:dateStr})}).then(r=>r.json());
+      state.reportId = cr.data.id; state.report = cr.data;
+      toast('Создана новая сводка на сегодня');
+    }
+    renderInfo(); renderPersonnel(); renderRemarks();
+  } catch(e) {
+    document.querySelector('.main').innerHTML=`<div class="card"><div class="card-body">
+      <strong style="color:var(--accent)">Ошибка подключения к серверу</strong><br><br>
+      Убедитесь что сервер запущен:<br>
+      <code style="font-family:var(--mono);font-size:12px;background:var(--bg);padding:4px 8px;display:inline-block;margin-top:6px;border-radius:3px">python3 app.py</code>
+    </div></div>`;
+  }
+}
+
+async function loadReport() {
+  const r = await fetch(`${API}/api/reports/${state.reportId}`).then(r=>r.json());
+  state.report = r.data;
+  state.personnel = r.data.personnel||[];
+  state.remarks = r.data.verbal_remarks||[];
+  state.prescriptions = r.data.prescriptions_log||[];
+  state.inputControl = r.data.input_control||[];
+  state.photos = r.data.photos||[];
+  const m = r.data.meetings?.[0];
+  if (m) {
+    state.meetingId = m.id;
+    document.getElementById('meetingLocation').value = m.location||'';
+    document.getElementById('meetingTime').value = m.time||'';
+    document.getElementById('meetingParticipants').value = m.participants||'';
+    document.getElementById('meetingAgenda').value = m.agenda||'';
+  }
+  updateStatus(); updateRemarksBadge(); renderPhotos(); renderInputControl(); renderPrescriptions(); renderOperational();
+}
+
+function updateStatus() {
+  const s = state.report?.status||'draft';
+  const el = document.getElementById('headerStatus');
+  el.textContent = s==='submitted'?'сдана':'черновик';
+  el.className = 'header-status'+(s==='submitted'?' submitted':'');
+  document.getElementById('submitInfo').textContent = s==='submitted'?`Сдана · ${dateStr}`:`Черновик · ${dateStr}`;
+  if (s==='submitted') { const b=document.getElementById('submitBtn'); b.disabled=true; b.textContent='Сдана ✓'; }
+}
+
+function updateRemarksBadge() {
+  const open = state.remarks.filter(r=>r.status==='open').length;
+  const b = document.getElementById('remarksBadge');
+  if (open>0){b.style.display='';b.textContent=open;}else{b.style.display='none';}
+}
+
+function renderInfo() {
+  const o = state.object;
+  document.getElementById('section-info').innerHTML = `
+    <div class="card">
+      <div class="card-header"><span class="card-title">Информация об объекте</span></div>
+      <div>${[
+        ['Объект',o.name],['Адрес',o.address||'—'],['Заказчик',o.client_name||'—'],
+        ['Договор',o.contract_number||'—'],['Инженер',state.report?.engineer_name||'—'],
+        ['Дата',dateStr],['Статус',`<span class="tag ${state.report?.status==='submitted'?'tag-submitted':'tag-draft'}">${state.report?.status==='submitted'?'Сдана':'Черновик'}</span>`]
+      ].map(([l,v])=>`<div class="info-row"><span class="info-label">${l}</span><span>${v}</span></div>`).join('')}</div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Корпуса / Блоки</span></div>
+      <div>${o.sections.map(s=>`<div class="info-row"><span>${s.name}</span><span class="tag ${s.is_active?'tag-submitted':'tag-draft'}">${s.is_active?'активен':'—'}</span></div>`).join('')}</div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Подрядчики (${o.contractors.filter(c=>c.is_active).length})</span></div>
+      <div>${o.contractors.filter(c=>c.is_active).map(c=>`
+        <div style="padding:8px 14px;border-bottom:1px solid var(--border)">
+          <div style="font-size:13px;font-weight:500">${c.name}</div>
+          <div style="font-size:11px;color:var(--text-muted)">${c.work_type||'—'}</div>
+        </div>`).join('')}</div>
+    </div>`;
+}
+
+function renderPersonnel() {
+  const rows = window._prows.length ? window._prows :
+    state.personnel.length ? state.personnel.map(p=>({...p,saved:true})) :
+    state.contractors.filter(c=>c.is_active).map(c=>({
+      contractor_id:c.id,contractor_name:c.name,
+      section_id:state.sections[0]?.id,headcount:0,work_description:'',saved:false
+    }));
+  window._prows = rows;
+  document.getElementById('personnelList').innerHTML = rows.map((row,i)=>`
+    <div class="personnel-row">
+      <div>
+        <div style="font-size:13px;font-weight:500;margin-bottom:4px">${row.contractor_name}</div>
+        <select style="font-size:11px;padding:3px 6px;margin-bottom:6px" onchange="window._prows[${i}].section_id=this.value">
+          ${state.sections.map(s=>`<option value="${s.id}"${row.section_id==s.id?' selected':''}>${s.name}</option>`).join('')}
+        </select>
+        <textarea placeholder="Описание работ..." style="min-height:52px;font-size:12px"
+          onblur="window._prows[${i}].work_description=this.value">${row.work_description||''}</textarea>
+      </div>
+      <input type="number" class="headcount-input" value="${row.headcount||''}" min="0" placeholder="0"
+        onchange="window._prows[${i}].headcount=this.value">
+      <button class="btn-icon" onclick="window._prows.splice(${i},1);renderPersonnel()" title="Удалить">✕</button>
+    </div>`).join('')+`
+    <div style="margin-top:12px">
+      <button class="btn btn-primary btn-sm" onclick="saveAllPersonnel()">Сохранить персонал</button>
+    </div>`;
+}
+
+function addPersonnelRow() {
+  const c = state.contractors.filter(c=>c.is_active)[0];
+  window._prows.push({contractor_id:c?.id,contractor_name:c?.name,section_id:state.sections[0]?.id,headcount:0,work_description:'',saved:false});
+  renderPersonnel();
+}
+
+async function saveAllPersonnel() {
+  const entries = window._prows.filter(r=>parseInt(r.headcount)>0||r.work_description).map(r=>({
+    contractor_id:r.contractor_id,section_id:r.section_id,
+    headcount:parseInt(r.headcount)||0,work_description:r.work_description
+  }));
+  await fetch(`${API}/api/reports/${state.reportId}/personnel`,{
+    method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(entries)});
+  toast('Персонал сохранён','success');
+}
+
+function renderInputControl() {
+  const list = document.getElementById('inputControlList');
+  if (!state.inputControl.length) { list.innerHTML=`<div class="empty"><div class="empty-icon">📦</div><div class="empty-text">нет записей</div></div>`; return; }
+  list.innerHTML = state.inputControl.map(ic=>`
+    <div style="padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between">
+        <strong>${ic.material_name||'—'}</strong>
+        <button class="btn-icon" onclick="deleteIC(${ic.id})">✕</button>
+      </div>
+      <div style="font-size:12px;color:var(--text-muted)">Кол-во: ${ic.quantity||'—'} · Документ: ${ic.document_name||'—'}</div>
+      ${ic.deviation_note?`<div style="font-size:12px;color:var(--accent);margin-top:2px">⚠ ${ic.deviation_note}</div>`:''}
+    </div>`).join('');
+}
+
+function addInputControl() {
+  const material=prompt('Наименование материала:'); if(!material)return;
+  const quantity=prompt('Количество:')||'';
+  const doc=prompt('Документ о качестве:')||'';
+  const dev=prompt('Отклонения (или пусто):')||'';
+  fetch(`${API}/api/reports/${state.reportId}/input_control`,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({material_name:material,quantity,document_name:doc,deviation_note:dev,engineer_id:state.userId})
+  }).then(r=>r.json()).then(r=>{state.inputControl.push(r.data);renderInputControl();toast('Добавлено','success');});
+}
+
+async function deleteIC(id) {
+  if(!confirm('Удалить?'))return;
+  await fetch(`${API}/api/input_control/${id}`,{method:'DELETE'});
+  state.inputControl=state.inputControl.filter(i=>i.id!==id); renderInputControl();
+}
+
+function renderOperational() {
+  const oc = state.report?.operational_control||[];
+  const list = document.getElementById('operationalList');
+  if(!oc.length){list.innerHTML=`<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">нет записей</div></div>`;return;}
+  list.innerHTML=oc.map(o=>`
+    <div style="padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="font-weight:500">${o.work_stage} <span style="font-size:11px;color:var(--text-muted);font-weight:400">${o.section_name||''}</span></div>
+      <div style="font-size:12px;color:var(--text-muted)">Операции: ${o.controlled_operations||'—'}</div>
+      <div style="font-size:12px;color:var(--text-muted)">Метод: ${o.control_method||'—'}</div>
+    </div>`).join('');
+}
+
+function addOperationalControl() {
+  const stage=prompt('Этап работ:'); if(!stage)return;
+  const ops=prompt('Контролируемые операции:')||'';
+  const method=prompt('Метод и объём контроля:')||'';
+  fetch(`${API}/api/reports/${state.reportId}/operational_control`,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({work_stage:stage,controlled_operations:ops,control_method:method,section_id:state.sections[0]?.id,engineer_id:state.userId})
+  }).then(()=>loadReport().then(()=>renderOperational()).then(()=>toast('Сохранено','success')));
+}
+
+function renderRemarks() {
+  const list = document.getElementById('remarksList');
+  if(!state.remarks.length){list.innerHTML=`<div class="empty"><div class="empty-icon">✓</div><div class="empty-text">замечаний нет</div></div>`;return;}
+  list.innerHTML=state.remarks.map(r=>`
+    <div class="remark-item">
+      <div class="remark-dot ${r.status}"></div>
+      <div style="flex:1">
+        <div style="font-size:13px">${r.description}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${r.section_name||''}${r.deadline?' · срок: '+r.deadline:''} · <span class="tag tag-${r.status}">${r.status==='open'?'открыто':'закрыто'}</span></div>
+        ${r.status==='open'?`<div class="remark-close-btn" onclick="closeRemark(${r.id})">Закрыть замечание</div>`:''}
+        ${r.closed_at?`<div style="font-size:11px;color:var(--green);margin-top:2px">Закрыто: ${r.closed_at}</div>`:''}
+      </div>
+      <button class="btn-icon" onclick="deleteRemark(${r.id})">✕</button>
+    </div>`).join('');
+  updateRemarksBadge();
+}
+
+function addRemark() {
+  const desc=prompt('Описание замечания:'); if(!desc)return;
+  const deadline=prompt('Срок устранения (ГГГГ-ММ-ДД или пусто):')||'';
+  fetch(`${API}/api/reports/${state.reportId}/remarks`,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({description:desc,deadline:deadline||null,section_id:state.sections[0]?.id,issued_by:state.userId})
+  }).then(r=>r.json()).then(r=>{state.remarks.push(r.data);renderRemarks();toast('Замечание добавлено','success');});
+}
+
+function closeRemark(id) {
+  const note=prompt('Примечание (необязательно):')||'';
+  fetch(`${API}/api/remarks/${id}/close`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({closed_note:note})})
+  .then(()=>{const r=state.remarks.find(r=>r.id===id);if(r){r.status='closed';r.closed_at=dateStr;}renderRemarks();toast('Закрыто','success');});
+}
+
+function deleteRemark(id) {
+  if(!confirm('Удалить замечание?'))return;
+  fetch(`${API}/api/remarks/${id}`,{method:'DELETE'}).then(()=>{state.remarks=state.remarks.filter(r=>r.id!==id);renderRemarks();});
+}
+
+function renderPrescriptions() {
+  const list = document.getElementById('prescriptionsList');
+  if(!state.prescriptions.length){list.innerHTML=`<div class="empty" style="padding:24px"><div class="empty-icon">📄</div><div class="empty-text">предписаний нет</div></div>`;return;}
+  list.innerHTML=`<table class="table"><tr><th>№</th><th>Дата</th><th>Корпус</th><th>Срок</th><th>Статус</th></tr>
+    ${state.prescriptions.map(p=>`<tr>
+      <td style="font-family:var(--mono)">${p.number||'—'}</td>
+      <td style="font-family:var(--mono)">${p.issue_date||'—'}</td>
+      <td>${p.section_name||'—'}</td>
+      <td style="font-family:var(--mono)">${p.deadline||'—'}</td>
+      <td>${p.status||'—'}</td></tr>`).join('')}</table>`;
+}
+
+function addPrescription() {
+  const number=prompt('Номер предписания (например: № 26):'); if(!number)return;
+  const date=prompt('Дата выдачи (ГГГГ-ММ-ДД):')||dateStr;
+  const deadline=prompt('Срок устранения:')||'';
+  const status=prompt('Статус из TeamJect:')||'';
+  fetch(`${API}/api/reports/${state.reportId}/prescriptions`,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({number,issue_date:date,deadline:deadline||null,status,section_id:state.sections[0]?.id})
+  }).then(r=>r.json()).then(r=>{state.prescriptions.push(r.data);renderPrescriptions();toast('Добавлено','success');});
+}
+
+async function saveMeeting() {
+  const data={location:document.getElementById('meetingLocation').value,time:document.getElementById('meetingTime').value,
+    participants:document.getElementById('meetingParticipants').value,agenda:document.getElementById('meetingAgenda').value,engineer_id:state.userId};
+  if(!data.location&&!data.participants){toast('Заполните место и участников','error');return;}
+  if(state.meetingId){
+    await fetch(`${API}/api/meetings/${state.meetingId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  } else {
+    const r=await fetch(`${API}/api/reports/${state.reportId}/meetings`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(r=>r.json());
+    state.meetingId=r.data.id;
+  }
+  toast('Совещание сохранено','success');
+}
+
+function clearMeeting(){['meetingLocation','meetingTime','meetingParticipants','meetingAgenda'].forEach(id=>document.getElementById(id).value='');}
+
+function renderPhotos() {
+  const grid=document.getElementById('photoGrid');
+  grid.querySelectorAll('.photo-thumb').forEach(el=>el.remove());
+  const addBtn=grid.querySelector('label');
+  state.photos.forEach(p=>{
+    const div=document.createElement('div'); div.className='photo-thumb';
+    div.innerHTML=`<img src="${API}/uploads/${p.file_path}" alt="">
+      <input class="photo-caption-input" placeholder="Подпись..." value="${(p.caption||'').replace(/"/g,'&quot;')}" onblur="updateCaption(${p.id},this.value)">
+      <button class="photo-remove" onclick="removePhoto(${p.id},this.parentNode)">✕</button>`;
+    grid.insertBefore(div,addBtn);
+  });
+  document.getElementById('photoCount').textContent=state.photos.length?`${state.photos.length} фото`:'';
+}
+
+async function handlePhotoUpload(e) {
+  const files=Array.from(e.target.files);
+  for(const file of files){
+    const fd=new FormData(); fd.append('file',file);
+    const r=await fetch(`${API}/api/reports/${state.reportId}/photos`,{method:'POST',body:fd}).then(r=>r.json());
+    if(r.ok)state.photos.push(r.data);
+  }
+  renderPhotos(); toast(`Загружено ${files.length} фото`,'success'); e.target.value='';
+}
+
+function updateCaption(id,caption){fetch(`${API}/api/photos/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({caption})});}
+
+async function removePhoto(id,el){
+  if(!confirm('Удалить фото?'))return;
+  await fetch(`${API}/api/photos/${id}`,{method:'DELETE'});
+  state.photos=state.photos.filter(p=>p.id!==id); el.remove();
+  document.getElementById('photoCount').textContent=state.photos.length?`${state.photos.length} фото`:'';
+}
+
+async function saveDraft(){await saveAllPersonnel();toast('Сводка сохранена','success');}
+
+async function submitReport(){
+  if(!confirm('Сдать сводку? После сдачи редактирование будет ограничено.'))return;
+  await fetch(`${API}/api/reports/${state.reportId}/submit`,{method:'POST'});
+  state.report.status='submitted'; updateStatus(); toast('Сводка сдана! ✓','success');
+}
+
+init();
+</script>
+</body>
+</html>

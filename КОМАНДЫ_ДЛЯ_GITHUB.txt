@@ -1,0 +1,21 @@
+# Вставляй эти команды в терминал по одной, нажимай Enter после каждой
+
+# 1. Перейди в папку pilot (вставь всю строку целиком):
+cd "/Users/macbook_vn/Library/Mobile Documents/com~apple~CloudDocs/_Развитие/Структура_качество_оценка/Сводка инженера СК/Daily_report/pilot"
+
+# 2. Инициализируй git:
+git init
+
+# 3. Добавь все файлы:
+git add .
+
+# 4. Создай первый коммит:
+git commit -m "Initial commit — пилот СК"
+
+# 5. Подключи GitHub (замени USERNAME на stroymanager-pilot):
+git remote add origin https://github.com/stroymanager-pilot/sk-pilot.git
+
+# 6. Отправь код на GitHub:
+git push -u origin main
+
+# После этого GitHub попросит логин и пароль — введи данные нового аккаунта

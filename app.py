@@ -1,0 +1,713 @@
+from flask import Flask, request, jsonify, send_from_directory
+from flask_cors import CORS
+import os, sys, hashlib, uuid
+from datetime import datetime, date
+
+sys.path.insert(0, os.path.dirname(__file__))
+from db.schema import get_db, init_db
+
+app = Flask(__name__, static_folder='static', static_url_path='')
+CORS(app)
+
+@app.get('/')
+def index():
+    return send_from_directory('static', 'login.html')
+
+UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config['MAX_CONTENT_LENGTH'] = 30 * 1024 * 1024  # 30 MB max на файл
+
+# ─────────────────────────────────────────────────────────
+# ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+# ─────────────────────────────────────────────────────────
+
+def rows_to_list(rows):
+    return [dict(r) for r in rows]
+
+def ok(data=None, **kwargs):
+    resp = {'ok': True}
+    if data is not None:
+        resp['data'] = data
+    resp.update(kwargs)
+    return jsonify(resp)
+
+def err(msg, code=400):
+    return jsonify({'ok': False, 'error': msg}), code
+
+# ─────────────────────────────────────────────────────────
+# ОБЪЕКТЫ
+# ─────────────────────────────────────────────────────────
+
+@app.get('/api/objects')
+def list_objects():
+    db = get_db()
+    rows = db.execute("SELECT * FROM objects WHERE is_active=1 ORDER BY name").fetchall()
+    db.close()
+    return ok(rows_to_list(rows))
+
+@app.post('/api/objects')
+def create_object():
+    d = request.json or {}
+    if not d.get('name'):
+        return err('name обязателен')
+    db = get_db()
+    cur = db.execute(
+        "INSERT INTO objects (name, address, client_name, contract_number, tj_object_id) VALUES (?,?,?,?,?)",
+        (d['name'], d.get('address'), d.get('client_name'), d.get('contract_number'), d.get('tj_object_id'))
+    )
+    db.commit()
+    row = db.execute("SELECT * FROM objects WHERE id=?", (cur.lastrowid,)).fetchone()
+    db.close()
+    return ok(dict(row)), 201
+
+@app.get('/api/objects/<int:obj_id>')
+def get_object(obj_id):
+    db = get_db()
+    row = db.execute("SELECT * FROM objects WHERE id=?", (obj_id,)).fetchone()
+    if not row:
+        db.close(); return err('Объект не найден', 404)
+    sections = db.execute("SELECT * FROM sections WHERE object_id=? AND is_active=1", (obj_id,)).fetchall()
+    contractors = db.execute("SELECT * FROM contractors WHERE object_id=? AND is_active=1", (obj_id,)).fetchall()
+    engineers = db.execute("""
+        SELECT u.id, u.full_name, u.email, u.role
+        FROM users u JOIN object_users ou ON u.id=ou.user_id
+        WHERE ou.object_id=?
+    """, (obj_id,)).fetchall()
+    db.close()
+    result = dict(row)
+    result['sections'] = rows_to_list(sections)
+    result['contractors'] = rows_to_list(contractors)
+    result['engineers'] = rows_to_list(engineers)
+    return ok(result)
+
+@app.patch('/api/objects/<int:obj_id>')
+def update_object(obj_id):
+    d = request.json or {}
+    db = get_db()
+    fields = ['name', 'address', 'client_name', 'contract_number', 'tj_object_id', 'is_active']
+    updates = {k: v for k, v in d.items() if k in fields}
+    if not updates:
+        db.close(); return err('Нет полей для обновления')
+    sql = ', '.join(f"{k}=?" for k in updates)
+    db.execute(f"UPDATE objects SET {sql} WHERE id=?", list(updates.values()) + [obj_id])
+    db.commit()
+    db.close()
+    return ok()
+
+# ─────────────────────────────────────────────────────────
+# СЕКЦИИ (корпуса / блоки)
+# ─────────────────────────────────────────────────────────
+
+@app.post('/api/objects/<int:obj_id>/sections')
+def add_section(obj_id):
+    d = request.json or {}
+    if not d.get('name'):
+        return err('name обязателен')
+    db = get_db()
+    cur = db.execute("INSERT INTO sections (object_id, name) VALUES (?,?)", (obj_id, d['name']))
+    db.commit()
+    row = db.execute("SELECT * FROM sections WHERE id=?", (cur.lastrowid,)).fetchone()
+    db.close()
+    return ok(dict(row)), 201
+
+@app.patch('/api/sections/<int:sec_id>')
+def update_section(sec_id):
+    d = request.json or {}
+    db = get_db()
+    if 'name' in d:
+        db.execute("UPDATE sections SET name=? WHERE id=?", (d['name'], sec_id))
+    if 'is_active' in d:
+        db.execute("UPDATE sections SET is_active=? WHERE id=?", (d['is_active'], sec_id))
+    db.commit()
+    db.close()
+    return ok()
+
+# ─────────────────────────────────────────────────────────
+# ПОДРЯДЧИКИ
+# ─────────────────────────────────────────────────────────
+
+@app.post('/api/objects/<int:obj_id>/contractors')
+def add_contractor(obj_id):
+    d = request.json or {}
+    if not d.get('name'):
+        return err('name обязателен')
+    db = get_db()
+    cur = db.execute(
+        "INSERT INTO contractors (object_id, name, work_type) VALUES (?,?,?)",
+        (obj_id, d['name'], d.get('work_type'))
+    )
+    db.commit()
+    row = db.execute("SELECT * FROM contractors WHERE id=?", (cur.lastrowid,)).fetchone()
+    db.close()
+    return ok(dict(row)), 201
+
+@app.patch('/api/contractors/<int:c_id>')
+def update_contractor(c_id):
+    d = request.json or {}
+    db = get_db()
+    fields = ['name', 'work_type', 'is_active']
+    updates = {k: v for k, v in d.items() if k in fields}
+    if updates:
+        sql = ', '.join(f"{k}=?" for k in updates)
+        db.execute(f"UPDATE contractors SET {sql} WHERE id=?", list(updates.values()) + [c_id])
+        db.commit()
+    db.close()
+    return ok()
+
+# ─────────────────────────────────────────────────────────
+# ПОЛЬЗОВАТЕЛИ
+# ─────────────────────────────────────────────────────────
+
+@app.get('/api/users')
+def list_users():
+    db = get_db()
+    rows = db.execute("SELECT id, full_name, email, role, tj_user_id FROM users ORDER BY full_name").fetchall()
+    db.close()
+    return ok(rows_to_list(rows))
+
+@app.post('/api/users')
+def create_user():
+    d = request.json or {}
+    if not d.get('email') or not d.get('full_name'):
+        return err('email и full_name обязательны')
+    pwd = d.get('password', 'changeme')
+    pwd_hash = hashlib.sha256(pwd.encode()).hexdigest()
+    db = get_db()
+    try:
+        cur = db.execute(
+            "INSERT INTO users (full_name, email, role, password_hash, tj_user_id) VALUES (?,?,?,?,?)",
+            (d['full_name'], d['email'], d.get('role', 'engineer'), pwd_hash, d.get('tj_user_id'))
+        )
+        db.commit()
+        row = db.execute("SELECT id, full_name, email, role FROM users WHERE id=?", (cur.lastrowid,)).fetchone()
+        db.close()
+        return ok(dict(row)), 201
+    except Exception as e:
+        db.close()
+        return err(f'Email уже существует: {e}')
+
+@app.post('/api/objects/<int:obj_id>/assign_user')
+def assign_user(obj_id):
+    d = request.json or {}
+    if not d.get('user_id'):
+        return err('user_id обязателен')
+    db = get_db()
+    try:
+        db.execute(
+            "INSERT OR REPLACE INTO object_users (object_id, user_id, date_from) VALUES (?,?,?)",
+            (obj_id, d['user_id'], d.get('date_from', date.today().isoformat()))
+        )
+        db.commit()
+        db.close()
+        return ok()
+    except Exception as e:
+        db.close(); return err(str(e))
+
+# ─────────────────────────────────────────────────────────
+# ЕЖЕДНЕВНЫЕ СВОДКИ
+# ─────────────────────────────────────────────────────────
+
+@app.get('/api/objects/<int:obj_id>/reports')
+def list_reports(obj_id):
+    db = get_db()
+    rows = db.execute("""
+        SELECT dr.*, u.full_name as engineer_name
+        FROM daily_reports dr
+        JOIN users u ON u.id = dr.user_id
+        WHERE dr.object_id=?
+        ORDER BY dr.report_date DESC
+        LIMIT 90
+    """, (obj_id,)).fetchall()
+    db.close()
+    return ok(rows_to_list(rows))
+
+@app.post('/api/reports')
+def create_report():
+    d = request.json or {}
+    required = ['object_id', 'user_id', 'report_date']
+    for f in required:
+        if not d.get(f):
+            return err(f'{f} обязателен')
+    db = get_db()
+    try:
+        cur = db.execute(
+            "INSERT INTO daily_reports (object_id, user_id, report_date) VALUES (?,?,?)",
+            (d['object_id'], d['user_id'], d['report_date'])
+        )
+        db.commit()
+        row = db.execute("SELECT * FROM daily_reports WHERE id=?", (cur.lastrowid,)).fetchone()
+        db.close()
+        return ok(dict(row)), 201
+    except Exception as e:
+        db.close()
+        return err(f'Сводка за эту дату уже существует: {e}')
+
+@app.get('/api/reports/<int:report_id>')
+def get_report(report_id):
+    db = get_db()
+    report = db.execute("""
+        SELECT dr.*, u.full_name as engineer_name, o.name as object_name
+        FROM daily_reports dr
+        JOIN users u ON u.id=dr.user_id
+        JOIN objects o ON o.id=dr.object_id
+        WHERE dr.id=?
+    """, (report_id,)).fetchone()
+    if not report:
+        db.close(); return err('Сводка не найдена', 404)
+    r = dict(report)
+    r['personnel'] = rows_to_list(db.execute("""
+        SELECT pe.*, c.name as contractor_name, s.name as section_name
+        FROM personnel_entries pe
+        LEFT JOIN contractors c ON c.id=pe.contractor_id
+        LEFT JOIN sections s ON s.id=pe.section_id
+        WHERE pe.report_id=?
+        ORDER BY c.name
+    """, (report_id,)).fetchall())
+    r['input_control'] = rows_to_list(db.execute(
+        "SELECT * FROM input_control WHERE report_id=?", (report_id,)).fetchall())
+    r['operational_control'] = rows_to_list(db.execute(
+        "SELECT oc.*, s.name as section_name FROM operational_control oc LEFT JOIN sections s ON s.id=oc.section_id WHERE oc.report_id=?", (report_id,)).fetchall())
+    r['verbal_remarks'] = rows_to_list(db.execute(
+        "SELECT vr.*, s.name as section_name, u.full_name as issued_by_name FROM verbal_remarks vr LEFT JOIN sections s ON s.id=vr.section_id LEFT JOIN users u ON u.id=vr.issued_by WHERE vr.report_id=?", (report_id,)).fetchall())
+    r['prescriptions_log'] = rows_to_list(db.execute(
+        "SELECT pl.*, s.name as section_name FROM prescriptions_log pl LEFT JOIN sections s ON s.id=pl.section_id WHERE pl.report_id=?", (report_id,)).fetchall())
+    r['meetings'] = rows_to_list(db.execute(
+        "SELECT * FROM meetings WHERE report_id=?", (report_id,)).fetchall())
+    r['photos'] = rows_to_list(db.execute(
+        "SELECT * FROM photos WHERE report_id=? ORDER BY sort_order", (report_id,)).fetchall())
+    r['acceptance_control'] = rows_to_list(db.execute(
+        "SELECT ac.*, s.name as section_name FROM acceptance_control ac LEFT JOIN sections s ON s.id=ac.section_id WHERE ac.report_id=?", (report_id,)).fetchall())
+    r['ks2_check'] = rows_to_list(db.execute(
+        "SELECT * FROM ks2_check WHERE report_id=?", (report_id,)).fetchall())
+    db.close()
+    return ok(r)
+
+@app.post('/api/reports/<int:report_id>/submit')
+def submit_report(report_id):
+    db = get_db()
+    db.execute(
+        "UPDATE daily_reports SET status='submitted', submitted_at=? WHERE id=?",
+        (datetime.now().isoformat(), report_id)
+    )
+    db.commit()
+    db.close()
+    return ok()
+
+# ─────────────────────────────────────────────────────────
+# ПЕРСОНАЛ
+# ─────────────────────────────────────────────────────────
+
+@app.post('/api/reports/<int:report_id>/personnel')
+def add_personnel(report_id):
+    d = request.json or {}
+    db = get_db()
+    # Если передан список — вставляем пачкой
+    entries = d if isinstance(d, list) else [d]
+    for e in entries:
+        db.execute(
+            "INSERT OR REPLACE INTO personnel_entries (report_id, contractor_id, section_id, headcount, work_description) VALUES (?,?,?,?,?)",
+            (report_id, e.get('contractor_id'), e.get('section_id'), e.get('headcount', 0), e.get('work_description'))
+        )
+    db.commit()
+    db.close()
+    return ok()
+
+@app.delete('/api/reports/<int:report_id>/personnel/<int:entry_id>')
+def delete_personnel(report_id, entry_id):
+    db = get_db()
+    db.execute("DELETE FROM personnel_entries WHERE id=? AND report_id=?", (entry_id, report_id))
+    db.commit()
+    db.close()
+    return ok()
+
+# ─────────────────────────────────────────────────────────
+# ВХОДНОЙ КОНТРОЛЬ
+# ─────────────────────────────────────────────────────────
+
+@app.post('/api/reports/<int:report_id>/input_control')
+def add_input_control(report_id):
+    d = request.json or {}
+    db = get_db()
+    cur = db.execute(
+        "INSERT INTO input_control (report_id, material_name, quantity, document_name, deviation_note, engineer_id) VALUES (?,?,?,?,?,?)",
+        (report_id, d.get('material_name'), d.get('quantity'), d.get('document_name'), d.get('deviation_note'), d.get('engineer_id'))
+    )
+    db.commit()
+    row = db.execute("SELECT * FROM input_control WHERE id=?", (cur.lastrowid,)).fetchone()
+    db.close()
+    return ok(dict(row)), 201
+
+@app.delete('/api/input_control/<int:ic_id>')
+def delete_input_control(ic_id):
+    db = get_db()
+    db.execute("DELETE FROM input_control WHERE id=?", (ic_id,))
+    db.commit()
+    db.close()
+    return ok()
+
+# ─────────────────────────────────────────────────────────
+# УСТНЫЕ ЗАМЕЧАНИЯ
+# ─────────────────────────────────────────────────────────
+
+@app.post('/api/reports/<int:report_id>/remarks')
+def add_remark(report_id):
+    d = request.json or {}
+    if not d.get('description'):
+        return err('description обязателен')
+    db = get_db()
+    cur = db.execute(
+        "INSERT INTO verbal_remarks (report_id, section_id, description, deadline, issued_by) VALUES (?,?,?,?,?)",
+        (report_id, d.get('section_id'), d['description'], d.get('deadline'), d.get('issued_by'))
+    )
+    db.commit()
+    row = db.execute("SELECT * FROM verbal_remarks WHERE id=?", (cur.lastrowid,)).fetchone()
+    db.close()
+    return ok(dict(row)), 201
+
+@app.patch('/api/remarks/<int:remark_id>/close')
+def close_remark(remark_id):
+    d = request.json or {}
+    db = get_db()
+    db.execute(
+        "UPDATE verbal_remarks SET status='closed', closed_at=?, closed_note=? WHERE id=?",
+        (d.get('closed_at', date.today().isoformat()), d.get('closed_note'), remark_id)
+    )
+    db.commit()
+    db.close()
+    return ok()
+
+@app.delete('/api/remarks/<int:remark_id>')
+def delete_remark(remark_id):
+    db = get_db()
+    db.execute("DELETE FROM verbal_remarks WHERE id=?", (remark_id,))
+    db.commit()
+    db.close()
+    return ok()
+
+# ─────────────────────────────────────────────────────────
+# ПРЕДПИСАНИЯ (журнал ссылок на TeamJect)
+# ─────────────────────────────────────────────────────────
+
+@app.post('/api/reports/<int:report_id>/prescriptions')
+def add_prescription(report_id):
+    d = request.json or {}
+    db = get_db()
+    cur = db.execute(
+        "INSERT INTO prescriptions_log (report_id, tj_prescription_id, number, issue_date, section_id, deadline, status) VALUES (?,?,?,?,?,?,?)",
+        (report_id, d.get('tj_prescription_id'), d.get('number'), d.get('issue_date'), d.get('section_id'), d.get('deadline'), d.get('status'))
+    )
+    db.commit()
+    row = db.execute("SELECT * FROM prescriptions_log WHERE id=?", (cur.lastrowid,)).fetchone()
+    db.close()
+    return ok(dict(row)), 201
+
+# ─────────────────────────────────────────────────────────
+# ОПЕРАЦИОННЫЙ КОНТРОЛЬ
+# ─────────────────────────────────────────────────────────
+
+@app.post('/api/reports/<int:report_id>/operational_control')
+def add_operational_control(report_id):
+    d = request.json or {}
+    db = get_db()
+    cur = db.execute(
+        "INSERT INTO operational_control (report_id, section_id, work_stage, controlled_operations, control_method, engineer_id) VALUES (?,?,?,?,?,?)",
+        (report_id, d.get('section_id'), d.get('work_stage'), d.get('controlled_operations'), d.get('control_method'), d.get('engineer_id'))
+    )
+    db.commit()
+    row = db.execute("SELECT * FROM operational_control WHERE id=?", (cur.lastrowid,)).fetchone()
+    db.close()
+    return ok(dict(row)), 201
+
+@app.delete('/api/operational_control/<int:oc_id>')
+def delete_operational_control(oc_id):
+    db = get_db()
+    db.execute("DELETE FROM operational_control WHERE id=?", (oc_id,))
+    db.commit()
+    db.close()
+    return ok()
+
+# ─────────────────────────────────────────────────────────
+# СОВЕЩАНИЯ
+# ─────────────────────────────────────────────────────────
+
+@app.post('/api/reports/<int:report_id>/meetings')
+def add_meeting(report_id):
+    d = request.json or {}
+    db = get_db()
+    cur = db.execute(
+        "INSERT INTO meetings (report_id, location, time, participants, agenda, engineer_id) VALUES (?,?,?,?,?,?)",
+        (report_id, d.get('location'), d.get('time'), d.get('participants'), d.get('agenda'), d.get('engineer_id'))
+    )
+    db.commit()
+    row = db.execute("SELECT * FROM meetings WHERE id=?", (cur.lastrowid,)).fetchone()
+    db.close()
+    return ok(dict(row)), 201
+
+@app.patch('/api/meetings/<int:meeting_id>')
+def update_meeting(meeting_id):
+    d = request.json or {}
+    db = get_db()
+    fields = ['location', 'time', 'participants', 'agenda']
+    updates = {k: v for k, v in d.items() if k in fields}
+    if updates:
+        sql = ', '.join(f"{k}=?" for k in updates)
+        db.execute(f"UPDATE meetings SET {sql} WHERE id=?", list(updates.values()) + [meeting_id])
+        db.commit()
+    db.close()
+    return ok()
+
+@app.delete('/api/prescriptions/<int:pre_id>')
+def delete_prescription(pre_id):
+    db = get_db()
+    db.execute("DELETE FROM prescriptions_log WHERE id=?", (pre_id,))
+    db.commit()
+    db.close()
+    return ok()
+
+
+def delete_meeting(meeting_id):
+    db = get_db()
+    db.execute("DELETE FROM meetings WHERE id=?", (meeting_id,))
+    db.commit()
+    db.close()
+    return ok()
+
+# ─────────────────────────────────────────────────────────
+# ФОТО
+# ─────────────────────────────────────────────────────────
+
+@app.post('/api/reports/<int:report_id>/photos')
+def upload_photo(report_id):
+    if 'file' not in request.files:
+        return err('Файл не найден')
+    f = request.files['file']
+    ext = os.path.splitext(f.filename)[1].lower()
+    if ext not in ['.jpg', '.jpeg', '.png', '.heic', '.webp']:
+        return err('Допустимые форматы: jpg, png, heic, webp')
+    filename = f"{uuid.uuid4().hex}{ext}"
+    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    f.save(filepath)
+    db = get_db()
+    remark_id = request.form.get('remark_id')
+    caption = request.form.get('caption', '')
+    # Порядок — следующий по списку
+    sort_order = db.execute("SELECT COALESCE(MAX(sort_order),0)+1 FROM photos WHERE report_id=?", (report_id,)).fetchone()[0]
+    cur = db.execute(
+        "INSERT INTO photos (report_id, file_path, caption, sort_order, remark_id) VALUES (?,?,?,?,?)",
+        (report_id, filename, caption, sort_order, remark_id)
+    )
+    db.commit()
+    row = db.execute("SELECT * FROM photos WHERE id=?", (cur.lastrowid,)).fetchone()
+    db.close()
+    return ok(dict(row)), 201
+
+@app.patch('/api/photos/<int:photo_id>')
+def update_photo(photo_id):
+    d = request.json or {}
+    db = get_db()
+    fields = ['caption', 'sort_order', 'remark_id']
+    updates = {k: v for k, v in d.items() if k in fields}
+    if updates:
+        sql = ', '.join(f"{k}=?" for k in updates)
+        db.execute(f"UPDATE photos SET {sql} WHERE id=?", list(updates.values()) + [photo_id])
+        db.commit()
+    db.close()
+    return ok()
+
+@app.delete('/api/photos/<int:photo_id>')
+def delete_photo(photo_id):
+    db = get_db()
+    row = db.execute("SELECT file_path FROM photos WHERE id=?", (photo_id,)).fetchone()
+    if row:
+        fpath = os.path.join(UPLOAD_FOLDER, row['file_path'])
+        if os.path.exists(fpath):
+            os.remove(fpath)
+        db.execute("DELETE FROM photos WHERE id=?", (photo_id,))
+        db.commit()
+    db.close()
+    return ok()
+
+@app.get('/uploads/<path:filename>')
+def serve_upload(filename):
+    return send_from_directory(UPLOAD_FOLDER, filename)
+
+# ─────────────────────────────────────────────────────────
+# ОТКРЫТЫЕ ЗАМЕЧАНИЯ по объекту (для руководителя)
+# ─────────────────────────────────────────────────────────
+
+@app.get('/api/users/<int:user_id>/objects')
+def user_objects(user_id):
+    db = get_db()
+    rows = db.execute("""
+        SELECT o.* FROM objects o
+        JOIN object_users ou ON ou.object_id=o.id
+        WHERE ou.user_id=? AND o.is_active=1
+        ORDER BY o.name
+    """, (user_id,)).fetchall()
+    db.close()
+    return ok(rows_to_list(rows))
+
+# ─────────────────────────────────────────────────────────
+# ПРИЁМОЧНЫЙ КОНТРОЛЬ
+# ─────────────────────────────────────────────────────────
+
+@app.post('/api/reports/<int:report_id>/acceptance_control')
+def add_acceptance_control(report_id):
+    d = request.json or {}
+    db = get_db()
+    cur = db.execute(
+        "INSERT INTO acceptance_control (report_id, section_id, work_stage, controlled_operations, control_method, engineer_id) VALUES (?,?,?,?,?,?)",
+        (report_id, d.get('section_id'), d.get('work_stage'), d.get('controlled_operations'), d.get('control_method'), d.get('engineer_id'))
+    )
+    db.commit()
+    row = db.execute("SELECT * FROM acceptance_control WHERE id=?", (cur.lastrowid,)).fetchone()
+    db.close()
+    return ok(dict(row)), 201
+
+@app.delete('/api/acceptance_control/<int:ac_id>')
+def delete_acceptance_control(ac_id):
+    db = get_db()
+    db.execute("DELETE FROM acceptance_control WHERE id=?", (ac_id,))
+    db.commit()
+    db.close()
+    return ok()
+
+# ─────────────────────────────────────────────────────────
+# ПРОВЕРКА ИД / КС-2
+# ─────────────────────────────────────────────────────────
+
+@app.post('/api/reports/<int:report_id>/ks2_check')
+def add_ks2_check(report_id):
+    d = request.json or {}
+    db = get_db()
+    cur = db.execute(
+        "INSERT INTO ks2_check (report_id, contractor_name, object_work, ks2_number, has_ks6a, has_id, engineer_id) VALUES (?,?,?,?,?,?,?)",
+        (report_id, d.get('contractor_name'), d.get('object_work'), d.get('ks2_number'),
+         1 if d.get('has_ks6a') else 0, 1 if d.get('has_id') else 0, d.get('engineer_id'))
+    )
+    db.commit()
+    row = db.execute("SELECT * FROM ks2_check WHERE id=?", (cur.lastrowid,)).fetchone()
+    db.close()
+    return ok(dict(row)), 201
+
+@app.delete('/api/ks2_check/<int:ks2_id>')
+def delete_ks2_check(ks2_id):
+    db = get_db()
+    db.execute("DELETE FROM ks2_check WHERE id=?", (ks2_id,))
+    db.commit()
+    db.close()
+    return ok()
+
+
+@app.post('/api/migrate')
+def run_migration():
+    db = get_db()
+    try:
+        db.executescript("""
+        CREATE TABLE IF NOT EXISTS acceptance_control (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            report_id INTEGER NOT NULL,
+            section_id INTEGER,
+            work_stage TEXT,
+            controlled_operations TEXT,
+            control_method TEXT,
+            engineer_id INTEGER
+        );
+        CREATE TABLE IF NOT EXISTS ks2_check (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            report_id INTEGER NOT NULL,
+            contractor_name TEXT,
+            object_work TEXT,
+            ks2_number TEXT,
+            has_ks6a INTEGER DEFAULT 0,
+            has_id INTEGER DEFAULT 0,
+            engineer_id INTEGER
+        );
+        """)
+        pwd = hashlib.sha256(b'password123').hexdigest()
+        db.execute("INSERT OR IGNORE INTO users (full_name,email,role,tj_user_id,password_hash) VALUES ('Ухов Илья Викторович','uhov@stroymanager.ru','engineer','uhov_tj_001','"+pwd+"')")
+        db.execute("INSERT OR IGNORE INTO objects (name,address,client_name,tj_object_id) VALUES ('IQ Гатчина (участок 6)','Ленинградская обл., г. Гатчина','ЛСТ Генподряд','tj_gatchina_006')")
+        gid = db.execute("SELECT id FROM objects WHERE tj_object_id='tj_gatchina_006'").fetchone()[0]
+        uid = db.execute("SELECT id FROM users WHERE email='uhov@stroymanager.ru'").fetchone()[0]
+        aid = db.execute("SELECT id FROM users WHERE role='admin'").fetchone()[0]
+        for name in ['Пятно застройки','Блок 3','ПОС']:
+            db.execute("INSERT OR IGNORE INTO sections (object_id,name) VALUES (?,?)",(gid,name))
+        for name,wt in [('ООО Гелиос','ПОС, замещение грунта'),('ООО Фортес','Лидерное бурение, сваи')]:
+            db.execute("INSERT OR IGNORE INTO contractors (object_id,name,work_type) VALUES (?,?,?)",(gid,name,wt))
+        db.execute("INSERT OR IGNORE INTO object_users (object_id,user_id) VALUES (?,?)",(gid,uid))
+        db.execute("INSERT OR IGNORE INTO object_users (object_id,user_id) VALUES (?,?)",(gid,aid))
+        db.commit()
+        db.close()
+        return ok('Миграция выполнена успешно')
+    except Exception as e:
+        db.close()
+        return err(str(e))
+
+
+@app.post('/api/fix_duplicates')
+def fix_duplicates():
+    db = get_db()
+    try:
+        # Remove duplicate sections — keep only the one with min id per (object_id, name)
+        db.execute("""
+            DELETE FROM sections WHERE id NOT IN (
+                SELECT MIN(id) FROM sections GROUP BY object_id, name
+            )
+        """)
+        # Remove duplicate contractors — keep only min id per (object_id, name)
+        db.execute("""
+            DELETE FROM contractors WHERE id NOT IN (
+                SELECT MIN(id) FROM contractors GROUP BY object_id, name
+            )
+        """)
+        db.commit()
+        db.close()
+        return ok('Дубликаты удалены')
+    except Exception as e:
+        db.close()
+        return err(str(e))
+
+
+    db = get_db()
+    rows = db.execute("""
+        SELECT vr.*, dr.report_date, s.name as section_name, u.full_name as engineer_name
+        FROM verbal_remarks vr
+        JOIN daily_reports dr ON dr.id=vr.report_id
+        LEFT JOIN sections s ON s.id=vr.section_id
+        LEFT JOIN users u ON u.id=vr.issued_by
+        WHERE dr.object_id=? AND vr.status='open'
+        ORDER BY dr.report_date DESC
+    """, (obj_id,)).fetchall()
+    db.close()
+    return ok(rows_to_list(rows))
+
+# ─────────────────────────────────────────────────────────
+# СТАТУС АКТИВНОСТИ ИНЖЕНЕРОВ (для руководителя)
+# ─────────────────────────────────────────────────────────
+
+@app.get('/api/objects/<int:obj_id>/activity')
+def engineer_activity(obj_id):
+    db = get_db()
+    today = date.today().isoformat()
+    rows = db.execute("""
+        SELECT u.id, u.full_name, u.email,
+               dr.report_date as last_report_date,
+               dr.status as last_report_status,
+               dr.id as last_report_id
+        FROM object_users ou
+        JOIN users u ON u.id=ou.user_id
+        LEFT JOIN daily_reports dr ON dr.user_id=u.id AND dr.object_id=? AND dr.report_date=?
+        WHERE ou.object_id=?
+    """, (obj_id, today, obj_id)).fetchall()
+    db.close()
+    return ok(rows_to_list(rows))
+
+# ─────────────────────────────────────────────────────────
+# СТАРТ
+# ─────────────────────────────────────────────────────────
+
+if __name__ == '__main__':
+    init_db()
+    print("🚀 Сервер запущен: http://localhost:5000")
+    print("📋 API документация: http://localhost:5000/api/objects")
+    app.run(debug=True, host='0.0.0.0', port=5001)

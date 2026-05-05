@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Администратор — Сводка СК</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root { --bg:#f5f4f0; --surface:#fff; --border:#e0ddd6; --border-strong:#c8c4bb; --text:#1a1916; --text-muted:#7a7870; --accent:#d4380d; --green:#389e0d; --green-light:#f6ffed; --radius:4px; --mono:'IBM Plex Mono',monospace; --sans:'IBM Plex Sans',sans-serif; }
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14px;min-height:100vh;}
+.header{background:var(--text);color:white;padding:12px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;}
+.header-logo{font-family:var(--mono);font-size:11px;letter-spacing:0.15em;color:#aaa;}
+.header-title{flex:1;font-size:13px;font-weight:500;}
+.header-user{font-family:var(--mono);font-size:11px;color:#aaa;}
+.logout{font-family:var(--mono);font-size:11px;color:#aaa;cursor:pointer;padding:3px 8px;border:1px solid #444;border-radius:2px;}
+.logout:hover{color:white;border-color:#888;}
+.nav{background:var(--surface);border-bottom:1px solid var(--border);display:flex;overflow-x:auto;scrollbar-width:none;position:sticky;top:45px;z-index:99;}
+.nav::-webkit-scrollbar{display:none;}
+.nav-item{padding:10px 16px;font-size:12px;font-family:var(--mono);color:var(--text-muted);white-space:nowrap;cursor:pointer;border-bottom:2px solid transparent;}
+.nav-item:hover{color:var(--text);}
+.nav-item.active{color:var(--accent);border-bottom-color:var(--accent);}
+.main{padding:16px;max-width:720px;margin:0 auto;}
+.section{display:none;}.section.active{display:block;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px;overflow:hidden;}
+.card-header{padding:10px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:#fafaf8;}
+.card-title{font-family:var(--mono);font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);}
+.card-body{padding:16px;}
+label{display:block;font-size:11px;font-family:var(--mono);color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em;}
+input,textarea,select{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--sans);font-size:13px;color:var(--text);background:var(--surface);outline:none;transition:border-color 0.15s;-webkit-appearance:none;}
+input:focus,textarea:focus,select:focus{border-color:var(--accent);}
+.form-row{margin-bottom:12px;}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:var(--radius);font-size:13px;font-family:var(--sans);font-weight:500;cursor:pointer;border:none;transition:all 0.15s;}
+.btn-primary{background:var(--accent);color:white;}.btn-primary:hover{background:#b52b00;}
+.btn-ghost{background:transparent;color:var(--text-muted);border:1px solid var(--border);}.btn-ghost:hover{border-color:var(--border-strong);color:var(--text);}
+.btn-danger{background:transparent;color:var(--accent);border:1px solid var(--accent);}.btn-danger:hover{background:var(--accent);color:white;}
+.btn-sm{padding:5px 10px;font-size:12px;}
+.btn-xs{padding:3px 8px;font-size:11px;}
+.list-item{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);}
+.list-item:last-child{border-bottom:none;}
+.list-item-text{flex:1;}
+.list-item-name{font-size:13px;font-weight:500;}
+.list-item-sub{font-size:11px;color:var(--text-muted);margin-top:2px;}
+.tag{display:inline-block;font-size:10px;font-family:var(--mono);padding:2px 6px;border-radius:2px;}
+.tag-on{background:var(--green-light);color:var(--green);}
+.tag-off{background:#f5f5f5;color:#999;}
+.toast{position:fixed;top:60px;right:16px;background:var(--text);color:white;padding:10px 16px;border-radius:var(--radius);font-size:13px;z-index:999;opacity:0;transform:translateY(-8px);transition:all 0.2s;pointer-events:none;}
+.toast.show{opacity:1;transform:translateY(0);}
+.toast.success{background:var(--green);}
+.empty{text-align:center;padding:28px;color:var(--text-muted);font-family:var(--mono);font-size:12px;}
+.reports-table{width:100%;border-collapse:collapse;}
+.reports-table th{font-family:var(--mono);font-size:10px;text-transform:uppercase;color:var(--text-muted);padding:8px 12px;text-align:left;border-bottom:1px solid var(--border);background:#fafaf8;}
+.reports-table td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px;}
+.reports-table tr:last-child td{border-bottom:none;}
+.reports-table tr:hover td{background:#fafaf8;cursor:pointer;}
+.status-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:5px;}
+.dot-submitted{background:var(--green);}
+.dot-draft{background:#f0a500;}
+</style>
+</head>
+<body>
+<div class="header">
+  <span class="header-logo">СК</span>
+  <span class="header-title">Администратор</span>
+  <span class="header-user" id="headerUser"></span>
+  <span class="logout" onclick="logout()">Выйти</span>
+</div>
+<div class="nav">
+  <div class="nav-item active" data-section="object">Объект</div>
+  <div class="nav-item" data-section="sections">Корпуса</div>
+  <div class="nav-item" data-section="contractors">Подрядчики</div>
+  <div class="nav-item" data-section="engineers">Инженеры</div>
+  <div class="nav-item" data-section="reports">Реестр сводок</div>
+</div>
+<div class="main">
+
+  <!-- ОБЪЕКТ -->
+  <div class="section active" id="section-object">
+    <div class="card">
+      <div class="card-header"><span class="card-title">Настройки объекта</span></div>
+      <div class="card-body">
+        <div class="form-grid">
+          <div class="form-row"><label>Название объекта</label><input id="objName" placeholder="ЖК «Окла»"></div>
+          <div class="form-row"><label>Адрес</label><input id="objAddress" placeholder="г. Санкт-Петербург..."></div>
+        </div>
+        <div class="form-grid">
+          <div class="form-row"><label>Заказчик</label><input id="objClient" placeholder="ООО «СЗ «ЛСТ Эксперт»"></div>
+          <div class="form-row"><label>Номер договора</label><input id="objContract" placeholder="№ 46/15-06-22"></div>
+        </div>
+        <div class="form-row"><label>ID объекта в TeamJect (для интеграции)</label><input id="objTjId" placeholder="tj_okla_001"></div>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button class="btn btn-primary btn-sm" onclick="saveObject()">Сохранить</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Место проведения совещаний (по умолчанию)</span></div>
+      <div class="card-body">
+        <div class="form-row"><label>Место</label><input id="meetingPlace" placeholder="Строительная площадка, вагончик прораба"></div>
+        <div class="form-row"><label>Время (по умолчанию)</label><input type="time" id="meetingTime"></div>
+        <div class="form-row"><label>Постоянные участники</label>
+          <textarea id="meetingParticipants" placeholder="Глуховской А.К. — инженер СК&#10;Иванов И.И. — прораб ООО «Пинстрой»" style="min-height:80px"></textarea>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="saveMeetingDefaults()">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- КОРПУСА -->
+  <div class="section" id="section-sections">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Участки / Секции</span>
+        <button class="btn btn-ghost btn-sm" onclick="showAddSection()">+ Добавить</button>
+      </div>
+      <div id="sectionsList"></div>
+      <div id="addSectionForm" style="display:none;padding:12px 16px;border-top:1px solid var(--border);background:#fafaf8">
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="newSectionName" placeholder="Корпус 5.3.1 / Блок 2 / Секция А" style="flex:1">
+          <button class="btn btn-primary btn-sm" onclick="addSection()">Добавить</button>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('addSectionForm').style.display='none'">Отмена</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ПОДРЯДЧИКИ -->
+  <div class="section" id="section-contractors">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Подрядчики</span>
+        <button class="btn btn-ghost btn-sm" onclick="showAddContractor()">+ Добавить</button>
+      </div>
+      <div id="contractorsList"></div>
+      <div id="addContractorForm" style="display:none;padding:14px 16px;border-top:1px solid var(--border);background:#fafaf8">
+        <div class="form-grid" style="margin-bottom:10px">
+          <div class="form-row" style="margin:0"><label>Название организации</label><input id="newContractorName" placeholder="ООО «Пинстрой»"></div>
+          <div class="form-row" style="margin:0"><label>Вид работ</label><input id="newContractorWork" placeholder="Армирование и бетонирование"></div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary btn-sm" onclick="addContractor()">Добавить</button>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('addContractorForm').style.display='none'">Отмена</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ИНЖЕНЕРЫ -->
+  <div class="section" id="section-engineers">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Инженеры на объекте</span>
+        <button class="btn btn-ghost btn-sm" onclick="showAddEngineer()">+ Назначить</button>
+      </div>
+      <div id="engineersList"></div>
+      <div id="addEngineerForm" style="display:none;padding:14px 16px;border-top:1px solid var(--border);background:#fafaf8">
+        <div class="form-row"><label>Выберите пользователя</label>
+          <select id="newEngineerSelect"></select>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary btn-sm" onclick="addEngineer()">Назначить</button>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('addEngineerForm').style.display='none'">Отмена</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- РЕЕСТР СВОДОК -->
+  <div class="section" id="section-reports">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Реестр ежедневных сводок</span>
+        <select id="filterEngineer" onchange="loadReports()" style="width:auto;font-size:12px;padding:4px 8px">
+          <option value="">Все инженеры</option>
+        </select>
+      </div>
+      <div id="reportsList"><div class="empty">Загрузка...</div></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- MODAL просмотра сводки -->
+<div id="reportModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;overflow-y:auto;padding:20px">
+  <div style="background:var(--surface);border-radius:var(--radius);max-width:680px;margin:0 auto;overflow:hidden">
+    <div style="background:var(--text);color:white;padding:12px 16px;display:flex;align-items:center;gap:12px">
+      <span style="flex:1;font-size:13px;font-weight:500" id="modalTitle">Сводка</span>
+      <button onclick="closeModal()" style="background:none;border:none;color:white;font-size:18px;cursor:pointer">✕</button>
+    </div>
+    <div id="modalBody" style="padding:16px"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = 'http://localhost:5001';
+const OBJ_ID = 1;
+let objectData = null;
+let allUsers = [];
+
+// Auth check
+const role = sessionStorage.getItem('userRole');
+const userName = sessionStorage.getItem('userName');
+if (!role) window.location.href = '/login.html';
+document.getElementById('headerUser').textContent = userName || '';
+
+function logout() { sessionStorage.clear(); window.location.href = '/login.html'; }
+
+function toast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast show '+(type||'');
+  setTimeout(()=>t.className='toast', 2500);
+}
+
+document.querySelectorAll('.nav-item').forEach(item=>{
+  item.addEventListener('click',()=>{
+    document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));
+    document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+    item.classList.add('active');
+    const sec = item.dataset.section;
+    document.getElementById('section-'+sec).classList.add('active');
+    if (sec==='reports') loadReports();
+  });
+});
+
+async function init() {
+  const [objRes, usersRes] = await Promise.all([
+    fetch(`${API}/api/objects/${OBJ_ID}`).then(r=>r.json()),
+    fetch(`${API}/api/users`).then(r=>r.json()),
+  ]);
+  objectData = objRes.data;
+  allUsers = usersRes.data;
+  fillObjectForm();
+  renderSections();
+  renderContractors();
+  renderEngineers();
+  fillEngineerFilter();
+}
+
+function fillObjectForm() {
+  const o = objectData;
+  document.getElementById('objName').value = o.name||'';
+  document.getElementById('objAddress').value = o.address||'';
+  document.getElementById('objClient').value = o.client_name||'';
+  document.getElementById('objContract').value = o.contract_number||'';
+  document.getElementById('objTjId').value = o.tj_object_id||'';
+  const defaults = JSON.parse(localStorage.getItem('meetingDefaults')||'{}');
+  document.getElementById('meetingDay') && (document.getElementById('meetingDay').value = defaults.day||'');
+  document.getElementById('meetingPlace').value = defaults.location||'';
+  document.getElementById('meetingTime').value = defaults.time||'';
+  document.getElementById('meetingParticipants').value = defaults.participants||'';
+}
+
+async function saveObject() {
+  const data = {
+    name: document.getElementById('objName').value,
+    address: document.getElementById('objAddress').value,
+    client_name: document.getElementById('objClient').value,
+    contract_number: document.getElementById('objContract').value,
+    tj_object_id: document.getElementById('objTjId').value,
+  };
+  await fetch(`${API}/api/objects/${OBJ_ID}`, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  toast('Объект сохранён', 'success');
+}
+
+function saveMeetingDefaults() {
+  const defaults = {
+    day: document.getElementById('meetingDay').value,
+    location: document.getElementById('meetingPlace').value,
+    time: document.getElementById('meetingTime').value,
+    participants: document.getElementById('meetingParticipants').value,
+  };
+  localStorage.setItem('meetingDefaults', JSON.stringify(defaults));
+  toast('Настройки совещания сохранены', 'success');
+}
+
+// SECTIONS
+function renderSections() {
+  const list = document.getElementById('sectionsList');
+  const sections = objectData.sections;
+  if (!sections.length) { list.innerHTML='<div class="empty">Корпуса не добавлены</div>'; return; }
+  list.innerHTML = sections.map(s=>`
+    <div class="list-item">
+      <div class="list-item-text">
+        <div class="list-item-name">${s.name}</div>
+      </div>
+      <span class="tag ${s.is_active?'tag-on':'tag-off'}">${s.is_active?'активен':'неактивен'}</span>
+      <button class="btn btn-xs btn-ghost" style="margin-left:6px" onclick="toggleSection(${s.id},${s.is_active})">
+        ${s.is_active?'Деактивировать':'Активировать'}
+      </button>
+    </div>`).join('');
+}
+
+function showAddSection() { document.getElementById('addSectionForm').style.display='block'; document.getElementById('newSectionName').focus(); }
+
+async function addSection() {
+  const name = document.getElementById('newSectionName').value.trim();
+  if (!name) return;
+  const r = await fetch(`${API}/api/objects/${OBJ_ID}/sections`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})}).then(r=>r.json());
+  objectData.sections.push(r.data);
+  document.getElementById('newSectionName').value='';
+  document.getElementById('addSectionForm').style.display='none';
+  renderSections(); toast('Корпус добавлен','success');
+}
+
+async function toggleSection(id, current) {
+  await fetch(`${API}/api/sections/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({is_active:current?0:1})});
+  const s = objectData.sections.find(s=>s.id===id);
+  if (s) s.is_active = current?0:1;
+  renderSections();
+}
+
+// CONTRACTORS
+function renderContractors() {
+  const list = document.getElementById('contractorsList');
+  const contractors = objectData.contractors;
+  if (!contractors.length) { list.innerHTML='<div class="empty">Подрядчики не добавлены</div>'; return; }
+  list.innerHTML = contractors.map(c=>`
+    <div class="list-item">
+      <div class="list-item-text">
+        <div class="list-item-name">${c.name}</div>
+        <div class="list-item-sub">${c.work_type||'—'}</div>
+      </div>
+      <span class="tag ${c.is_active?'tag-on':'tag-off'}">${c.is_active?'активен':'неактивен'}</span>
+      <button class="btn btn-xs btn-ghost" style="margin-left:6px" onclick="toggleContractor(${c.id},${c.is_active})">
+        ${c.is_active?'Деактивировать':'Активировать'}
+      </button>
+    </div>`).join('');
+}
+
+function showAddContractor() { document.getElementById('addContractorForm').style.display='block'; document.getElementById('newContractorName').focus(); }
+
+async function addContractor() {
+  const name = document.getElementById('newContractorName').value.trim();
+  if (!name) return;
+  const work = document.getElementById('newContractorWork').value.trim();
+  const r = await fetch(`${API}/api/objects/${OBJ_ID}/contractors`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,work_type:work})}).then(r=>r.json());
+  objectData.contractors.push(r.data);
+  document.getElementById('newContractorName').value='';
+  document.getElementById('newContractorWork').value='';
+  document.getElementById('addContractorForm').style.display='none';
+  renderContractors(); toast('Подрядчик добавлен','success');
+}
+
+async function toggleContractor(id, current) {
+  await fetch(`${API}/api/contractors/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({is_active:current?0:1})});
+  const c = objectData.contractors.find(c=>c.id===id);
+  if (c) c.is_active = current?0:1;
+  renderContractors();
+}
+
+// ENGINEERS
+function renderEngineers() {
+  const list = document.getElementById('engineersList');
+  const engineers = objectData.engineers;
+  if (!engineers.length) { list.innerHTML='<div class="empty">Инженеры не назначены</div>'; return; }
+  list.innerHTML = engineers.map(e=>`
+    <div class="list-item">
+      <div class="list-item-text">
+        <div class="list-item-name">${e.full_name}</div>
+        <div class="list-item-sub">${e.email} · ${e.role==='admin'?'Администратор':e.role==='senior'?'Главный инженер':'Инженер СК'}</div>
+      </div>
+    </div>`).join('');
+}
+
+function showAddEngineer() {
+  const sel = document.getElementById('newEngineerSelect');
+  sel.innerHTML = allUsers.map(u=>`<option value="${u.id}">${u.full_name} (${u.email})</option>`).join('');
+  document.getElementById('addEngineerForm').style.display='block';
+}
+
+async function addEngineer() {
+  const uid = parseInt(document.getElementById('newEngineerSelect').value);
+  await fetch(`${API}/api/objects/${OBJ_ID}/assign_user`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid})});
+  const user = allUsers.find(u=>u.id===uid);
+  if (user && !objectData.engineers.find(e=>e.id===uid)) objectData.engineers.push(user);
+  document.getElementById('addEngineerForm').style.display='none';
+  renderEngineers(); toast('Инженер назначен','success');
+}
+
+function fillEngineerFilter() {
+  const sel = document.getElementById('filterEngineer');
+  objectData.engineers.forEach(e=>{
+    const opt = document.createElement('option');
+    opt.value = e.id; opt.textContent = e.full_name; sel.appendChild(opt);
+  });
+}
+
+// REPORTS
+async function loadReports() {
+  const list = document.getElementById('reportsList');
+  list.innerHTML = '<div class="empty">Загрузка...</div>';
+  const r = await fetch(`${API}/api/objects/${OBJ_ID}/reports`).then(r=>r.json());
+  let reports = r.data || [];
+  const filterUid = document.getElementById('filterEngineer').value;
+  if (filterUid) reports = reports.filter(r=>r.user_id==filterUid);
+  if (!reports.length) { list.innerHTML='<div class="empty">Сводок нет</div>'; return; }
+  list.innerHTML = `<table class="reports-table">
+    <tr><th>Дата</th><th>Инженер</th><th>Статус</th><th>Создана</th></tr>
+    ${reports.map(r=>`<tr onclick="openReport(${r.id},'${r.report_date}','${r.engineer_name}')">
+      <td style="font-family:var(--mono)">${r.report_date}</td>
+      <td>${r.engineer_name}</td>
+      <td><span class="status-dot ${r.status==='submitted'?'dot-submitted':'dot-draft'}"></span>${r.status==='submitted'?'Сдана':'Черновик'}</td>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">${r.created_at?.slice(0,16)||'—'}</td>
+    </tr>`).join('')}
+  </table>`;
+}
+
+async function openReport(id, date, engineer) {
+  document.getElementById('modalTitle').textContent = `Сводка · ${date} · ${engineer}`;
+  document.getElementById('modalBody').innerHTML = '<div class="empty">Загрузка...</div>';
+  document.getElementById('reportModal').style.display = 'block';
+  const r = await fetch(`${API}/api/reports/${id}`).then(r=>r.json());
+  const d = r.data;
+
+  const personnel = d.personnel?.filter(p=>p.headcount>0)||[];
+  const remarks = d.verbal_remarks||[];
+  const prescriptions = d.prescriptions_log||[];
+  const inputControl = d.input_control||[];
+  const meetings = d.meetings||[];
+  const photos = d.photos||[];
+
+  document.getElementById('modalBody').innerHTML = `
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+      ${[['Инженер',d.engineer_name],['Дата',d.report_date],['Статус',d.status==='submitted'?'Сдана':'Черновик']].map(([l,v])=>`
+      <div style="background:var(--bg);padding:8px 12px;border-radius:3px;flex:1;min-width:120px">
+        <div style="font-size:10px;font-family:var(--mono);color:var(--text-muted);margin-bottom:2px">${l}</div>
+        <div style="font-size:13px;font-weight:500">${v}</div>
+      </div>`).join('')}
+    </div>
+
+    ${personnel.length?`
+    <div style="margin-bottom:16px">
+      <div style="font-family:var(--mono);font-size:11px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Персонал</div>
+      ${personnel.map(p=>`<div style="padding:6px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between">
+        <div><div style="font-size:13px;font-weight:500">${p.contractor_name}</div><div style="font-size:11px;color:var(--text-muted)">${p.section_name||''} · ${p.work_description||''}</div></div>
+        <div style="font-family:var(--mono);font-size:16px;font-weight:500;min-width:32px;text-align:right">${p.headcount}</div>
+      </div>`).join('')}
+    </div>`:''}
+
+    ${inputControl.length?`
+    <div style="margin-bottom:16px">
+      <div style="font-family:var(--mono);font-size:11px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Входной контроль</div>
+      ${inputControl.map(ic=>`<div style="padding:6px 0;border-bottom:1px solid var(--border)">
+        <div style="font-size:13px;font-weight:500">${ic.material_name}</div>
+        <div style="font-size:11px;color:var(--text-muted)">${ic.quantity} · ${ic.document_name}</div>
+        ${ic.deviation_note?`<div style="font-size:11px;color:var(--accent)">⚠ ${ic.deviation_note}</div>`:''}
+      </div>`).join('')}
+    </div>`:''}
+
+    ${remarks.length?`
+    <div style="margin-bottom:16px">
+      <div style="font-family:var(--mono);font-size:11px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Замечания (${remarks.filter(r=>r.status==='open').length} открытых)</div>
+      ${remarks.map(r=>`<div style="padding:6px 0;border-bottom:1px solid var(--border);display:flex;gap:8px">
+        <div style="width:7px;height:7px;border-radius:50%;margin-top:5px;flex-shrink:0;background:${r.status==='open'?'var(--accent)':'var(--green)'}"></div>
+        <div><div style="font-size:13px">${r.description}</div>
+        <div style="font-size:11px;color:var(--text-muted)">${r.section_name||''} ${r.deadline?'· срок: '+r.deadline:''}</div></div>
+      </div>`).join('')}
+    </div>`:''}
+
+    ${prescriptions.length?`
+    <div style="margin-bottom:16px">
+      <div style="font-family:var(--mono);font-size:11px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Предписания</div>
+      ${prescriptions.map(p=>`<div style="padding:6px 0;border-bottom:1px solid var(--border)">
+        <span style="font-family:var(--mono)">${p.number}</span> · ${p.issue_date} · ${p.status}
+      </div>`).join('')}
+    </div>`:''}
+
+    ${meetings.length?`
+    <div style="margin-bottom:16px">
+      <div style="font-family:var(--mono);font-size:11px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Совещание</div>
+      ${meetings.map(m=>`<div style="font-size:13px"><strong>${m.location}</strong> · ${m.time}<br>
+        <div style="font-size:12px;color:var(--text-muted);white-space:pre-line;margin-top:4px">${m.participants||''}</div>
+      </div>`).join('')}
+    </div>`:''}
+
+    ${photos.length?`
+    <div style="margin-bottom:16px">
+      <div style="font-family:var(--mono);font-size:11px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Фото (${photos.length})</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+        ${photos.map(p=>`<div style="border-radius:3px;overflow:hidden;border:1px solid var(--border)">
+          <img src="${API}/uploads/${p.file_path}" style="width:100%;aspect-ratio:1;object-fit:cover">
+          ${p.caption?`<div style="padding:4px 6px;font-size:11px;color:var(--text-muted)">${p.caption}</div>`:''}
+        </div>`).join('')}
+      </div>
+    </div>`:''}
+  `;
+}
+
+function closeModal() { document.getElementById('reportModal').style.display='none'; }
+
+init();
+</script>
+</body>
+</html>
