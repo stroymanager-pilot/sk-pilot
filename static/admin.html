@@ -399,7 +399,7 @@ async function loadReports() {
   if (!reports.length) { list.innerHTML='<div class="empty">Сводок нет</div>'; return; }
   list.innerHTML = `<table class="reports-table">
     <tr><th>Дата</th><th>Инженер</th><th>Статус</th><th>Создана</th></tr>
-    ${reports.map(r=>`<tr onclick="openReport(${r.id},'${r.report_date}','${r.engineer_name}')">
+    ${reports.map(r=>`<tr onclick="openReport(${r.id})" data-date="${r.report_date}" data-eng="${r.engineer_name||''}" style="cursor:pointer">
       <td style="font-family:var(--mono)">${r.report_date}</td>
       <td>${r.engineer_name}</td>
       <td><span class="status-dot ${r.status==='submitted'?'dot-submitted':'dot-draft'}"></span>${r.status==='submitted'?'Сдана':'Черновик'}</td>
@@ -408,12 +408,14 @@ async function loadReports() {
   </table>`;
 }
 
-async function openReport(id, date, engineer) {
-  document.getElementById('modalTitle').textContent = `Сводка · ${date} · ${engineer}`;
-  document.getElementById('modalBody').innerHTML = '<div class="empty">Загрузка...</div>';
+async function openReport(id) {
   document.getElementById('reportModal').style.display = 'block';
+  document.getElementById('modalTitle').textContent = 'Загрузка...';
+  document.getElementById('modalBody').innerHTML = '<div style="text-align:center;padding:40px;color:#888">Загрузка сводки...</div>';
+  document.getElementById('modalBody').innerHTML = '<div class="empty">Загрузка...</div>';
   const r = await fetch(`${API}/api/reports/${id}`).then(r=>r.json());
   const d = r.data;
+  document.getElementById('modalTitle').textContent = `Сводка · ${d.report_date} · ${d.engineer_name}`;
 
   const personnel = d.personnel?.filter(p=>p.headcount>0)||[];
   const remarks = d.verbal_remarks||[];
