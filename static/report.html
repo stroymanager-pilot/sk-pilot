@@ -266,14 +266,24 @@ async function init() {
     S.sections = S.object.sections.filter(s=>s.is_active);
     S.mySections = mySecs.data || [];
     // Combine admin sections + my own sections
-    S.allSections = [...S.sections, ...S.mySections];
+    S.allSections = [...(S.sections||[]), ...(S.mySections||[])];
     document.getElementById('hTitle').textContent = S.object.name;
     const todayRep = repList.data?.find(r=>r.report_date===dateStr&&r.user_id===userId);
     if (todayRep) { S.reportId=todayRep.id; await loadReport(); }
     else {
-      const cr = await fetch(`${API}/api/reports`,{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({object_id:S.objectId,user_id:userId,report_date:dateStr})}).then(r=>r.json());
-      S.reportId=cr.data.id; S.report=cr.data;
+      try {
+        const cr = await fetch(`${API}/api/reports`,{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({object_id:S.objectId,user_id:userId,report_date:dateStr})}).then(r=>r.json());
+        if (cr.ok) { S.reportId=cr.data.id; S.report=cr.data; }
+        else {
+          // Сводка уже есть (race condition) — ищем снова
+          const rep2 = await fetch(`${API}/api/objects/${S.objectId}/reports`).then(r=>r.json());
+          const found = rep2.data?.find(r=>r.report_date===dateStr&&r.user_id===userId);
+          if (found) { S.reportId=found.id; await loadReport(); }
+        }
+      } catch(createErr) {
+        console.error('Create report error:', createErr);
+      }
     }
     loadMeetingDefaults();
     buildNav();
