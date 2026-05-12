@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from db.schema import get_db, init_db
 
 app = Flask(__name__, static_folder='static', static_url_path='')
+init_db()  # Ensure DB exists on startup
 CORS(app)
 
 @app.get('/')
@@ -703,8 +704,316 @@ def engineer_activity(obj_id):
     return ok(rows_to_list(rows))
 
 # ─────────────────────────────────────────────────────────
-# СТАРТ
+# ПРОЕКТЫ (настраивает Админ)
 # ─────────────────────────────────────────────────────────
+
+@app.get('/api/projects')
+def list_projects():
+    db = get_db()
+    rows = db.execute("SELECT * FROM projects WHERE is_active=1 ORDER BY name").fetchall()
+    db.close()
+    return ok(rows_to_list(rows))
+
+@app.post('/api/projects')
+def create_project():
+    d = request.json or {}
+    if not d.get('name'): return err('name обязателен')
+    db = get_db()
+    cur = db.execute("INSERT INTO projects (name, description, tj_project_id) VALUES (?,?,?)",
+        (d['name'], d.get('description'), d.get('tj_project_id')))
+    db.commit()
+    row = db.execute("SELECT * FROM projects WHERE id=?", (cur.lastrowid,)).fetchone()
+    db.close()
+    return ok(dict(row)), 201
+
+@app.patch('/api/projects/<int:proj_id>')
+def update_project(proj_id):
+    d = request.json or {}
+    db = get_db()
+    fields = ['name', 'description', 'tj_project_id', 'is_active']
+    updates = {k: v for k, v in d.items() if k in fields}
+    if updates:
+        sql = ', '.join(f"{k}=?" for k in updates)
+        db.execute(f"UPDATE projects SET {sql} WHERE id=?", list(updates.values()) + [proj_id])
+        db.commit()
+    db.close()
+    return ok()
+
+@app.get('/api/projects/<int:proj_id>/objects')
+def project_objects(proj_id):
+    db = get_db()
+    rows = db.execute("""
+        SELECT o.*, GROUP_CONCAT(u.full_name, ', ') as engineers
+        FROM objects o
+        LEFT JOIN object_users ou ON ou.object_id = o.id
+        LEFT JOIN users u ON u.id = ou.user_id
+        WHERE o.project_id=? AND o.is_active=1
+        GROUP BY o.id ORDER BY o.name
+    """, (proj_id,)).fetchall()
+    db.close()
+    return ok(rows_to_list(rows))
+
+# ─────────────────────────────────────────────────────────
+# ПАРТНЁРЫ (настраивает Админ)
+# ─────────────────────────────────────────────────────────
+
+@app.get('/api/partners')
+def list_partners():
+    db = get_db()
+    rows = db.execute("SELECT * FROM partners WHERE is_active=1 ORDER BY name").fetchall()
+    db.close()
+    return ok(rows_to_list(rows))
+
+@app.post('/api/partners')
+def create_partner():
+    d = request.json or {}
+    if not d.get('name'): return err('name обязателен')
+    db = get_db()
+    cur = db.execute("""INSERT INTO partners (name, type, address, contact_name, contact_role, inn, phone, email, notes)
+        VALUES (?,?,?,?,?,?,?,?,?)""",
+        (d['name'], d.get('type'), d.get('address'), d.get('contact_name'),
+         d.get('contact_role'), d.get('inn'), d.get('phone'), d.get('email'), d.get('notes')))
+    db.commit()
+    row = db.execute("SELECT * FROM partners WHERE id=?", (cur.lastrowid,)).fetchone()
+    db.close()
+    return ok(dict(row)), 201
+
+@app.patch('/api/partners/<int:pid>')
+def update_partner(pid):
+    d = request.json or {}
+    db = get_db()
+    fields = ['name', 'type', 'address', 'contact_name', 'contact_role', 'inn', 'phone', 'email', 'notes', 'is_active']
+    updates = {k: v for k, v in d.items() if k in fields}
+    if updates:
+        sql = ', '.join(f"{k}=?" for k in updates)
+        db.execute(f"UPDATE partners SET {sql} WHERE id=?", list(updates.values()) + [pid])
+        db.commit()
+    db.close()
+    return ok()
+
+@app.delete('/api/partners/<int:pid>')
+def delete_partner(pid):
+    db = get_db()
+    db.execute("UPDATE partners SET is_active=0 WHERE id=?", (pid,))
+    db.commit(); db.close()
+    return ok()
+
+# ─────────────────────────────────────────────────────────
+# УЧАСТКИ (настраивает инженер сам)
+# ─────────────────────────────────────────────────────────
+
+@app.get('/api/objects/<int:obj_id>/my_sections')
+def list_my_sections(obj_id):
+    user_id = request.args.get('user_id')
+    db = get_db()
+    if user_id:
+        rows = db.execute("""
+            SELECT * FROM user_sections
+            WHERE object_id=? AND user_id=? AND is_active=1 ORDER BY name
+        """, (obj_id, user_id)).fetchall()
+    else:
+        rows = db.execute("""
+            SELECT us.*, u.full_name as engineer_name FROM user_sections us
+            JOIN users u ON u.id=us.user_id
+            WHERE us.object_id=? AND us.is_active=1 ORDER BY us.name
+        """, (obj_id,)).fetchall()
+    db.close()
+    return ok(rows_to_list(rows))
+
+@app.post('/api/objects/<int:obj_id>/my_sections')
+def add_my_section(obj_id):
+    d = request.json or {}
+    if not d.get('name') or not d.get('user_id'): return err('name и user_id обязательны')
+    db = get_db()
+    cur = db.execute("INSERT INTO user_sections (object_id, user_id, name) VALUES (?,?,?)",
+        (obj_id, d['user_id'], d['name']))
+    db.commit()
+    row = db.execute("SELECT * FROM user_sections WHERE id=?", (cur.lastrowid,)).fetchone()
+    db.close()
+    return ok(dict(row)), 201
+
+@app.patch('/api/my_sections/<int:sec_id>')
+def update_my_section(sec_id):
+    d = request.json or {}
+    db = get_db()
+    if 'name' in d:
+        db.execute("UPDATE user_sections SET name=? WHERE id=?", (d['name'], sec_id))
+    if 'is_active' in d:
+        db.execute("UPDATE user_sections SET is_active=? WHERE id=?", (d['is_active'], sec_id))
+    db.commit(); db.close()
+    return ok()
+
+@app.delete('/api/my_sections/<int:sec_id>')
+def delete_my_section(sec_id):
+    db = get_db()
+    db.execute("UPDATE user_sections SET is_active=0 WHERE id=?", (sec_id,))
+    db.commit(); db.close()
+    return ok()
+
+# ─────────────────────────────────────────────────────────
+# СВОДКИ — история инженера (только свои)
+# ─────────────────────────────────────────────────────────
+
+@app.get('/api/my_reports')
+def my_reports():
+    user_id = request.args.get('user_id')
+    if not user_id: return err('user_id обязателен')
+    db = get_db()
+    rows = db.execute("""
+        SELECT dr.*, o.name as object_name, p.name as project_name
+        FROM daily_reports dr
+        JOIN objects o ON o.id=dr.object_id
+        LEFT JOIN projects p ON p.id=o.project_id
+        WHERE dr.user_id=?
+        ORDER BY dr.report_date DESC
+    """, (user_id,)).fetchall()
+    db.close()
+    return ok(rows_to_list(rows))
+
+# ─────────────────────────────────────────────────────────
+# СВОДКИ — все (только для Админа)
+# ─────────────────────────────────────────────────────────
+
+@app.get('/api/all_reports')
+def all_reports():
+    db = get_db()
+    project_id = request.args.get('project_id')
+    object_id = request.args.get('object_id')
+    user_id = request.args.get('user_id')
+    query = """
+        SELECT dr.*, u.full_name as engineer_name,
+               o.name as object_name, p.name as project_name
+        FROM daily_reports dr
+        JOIN users u ON u.id=dr.user_id
+        JOIN objects o ON o.id=dr.object_id
+        LEFT JOIN projects p ON p.id=o.project_id
+        WHERE 1=1
+    """
+    params = []
+    if project_id: query += " AND p.id=?"; params.append(project_id)
+    if object_id: query += " AND o.id=?"; params.append(object_id)
+    if user_id: query += " AND dr.user_id=?"; params.append(user_id)
+    query += " ORDER BY dr.report_date DESC LIMIT 200"
+    rows = db.execute(query, params).fetchall()
+    db.close()
+    return ok(rows_to_list(rows))
+
+# ─────────────────────────────────────────────────────────
+# ФОТО — управление (Админ: все + удаление; Инженер: свои)
+# ─────────────────────────────────────────────────────────
+
+@app.get('/api/all_photos')
+def all_photos():
+    """Все фото — только для Админа"""
+    db = get_db()
+    project_id = request.args.get('project_id')
+    object_id = request.args.get('object_id')
+    query = """
+        SELECT ph.*, u.full_name as engineer_name,
+               o.name as object_name, dr.report_date,
+               p.name as project_name
+        FROM photos ph
+        JOIN daily_reports dr ON dr.id=ph.report_id
+        JOIN users u ON u.id=dr.user_id
+        JOIN objects o ON o.id=dr.object_id
+        LEFT JOIN projects p ON p.id=o.project_id
+        WHERE 1=1
+    """
+    params = []
+    if project_id: query += " AND p.id=?"; params.append(project_id)
+    if object_id: query += " AND o.id=?"; params.append(object_id)
+    query += " ORDER BY ph.uploaded_at DESC"
+    rows = db.execute(query, params).fetchall()
+    db.close()
+    return ok(rows_to_list(rows))
+
+@app.get('/api/my_photos')
+def my_photos():
+    """Фото инженера"""
+    user_id = request.args.get('user_id')
+    if not user_id: return err('user_id обязателен')
+    db = get_db()
+    rows = db.execute("""
+        SELECT ph.*, o.name as object_name, dr.report_date
+        FROM photos ph
+        JOIN daily_reports dr ON dr.id=ph.report_id
+        JOIN objects o ON o.id=dr.object_id
+        WHERE dr.user_id=?
+        ORDER BY ph.uploaded_at DESC
+    """, (user_id,)).fetchall()
+    db.close()
+    return ok(rows_to_list(rows))
+
+# ─────────────────────────────────────────────────────────
+# ЗАГРУЗКА ПРОТОКОЛА СОВЕЩАНИЯ
+# ─────────────────────────────────────────────────────────
+
+@app.post('/api/meetings/<int:meeting_id>/protocol')
+def upload_protocol(meeting_id):
+    if 'file' not in request.files: return err('Файл не найден')
+    f = request.files['file']
+    ext = os.path.splitext(f.filename)[1].lower()
+    if ext not in ['.pdf', '.docx', '.doc', '.jpg', '.jpeg', '.png']:
+        return err('Допустимые форматы: pdf, docx, doc, jpg, png')
+    filename = f"protocol_{meeting_id}_{uuid.uuid4().hex[:8]}{ext}"
+    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    f.save(filepath)
+    db = get_db()
+    db.execute("UPDATE meetings SET protocol_file=? WHERE id=?", (filename, meeting_id))
+    db.commit(); db.close()
+    return ok({'protocol_file': filename})
+
+# ─────────────────────────────────────────────────────────
+# ОБНОВЛЕНИЕ SCHEMA ДЛЯ RENDER (миграция при старте)
+# ─────────────────────────────────────────────────────────
+
+@app.post('/api/migrate_v2')
+def migrate_v2():
+    db = get_db()
+    try:
+        db.executescript("""
+        CREATE TABLE IF NOT EXISTS projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL, description TEXT,
+            tj_project_id TEXT, is_active INTEGER DEFAULT 1,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS partners (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL, type TEXT, address TEXT,
+            contact_name TEXT, contact_role TEXT, inn TEXT,
+            phone TEXT, email TEXT, notes TEXT,
+            is_active INTEGER DEFAULT 1,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS user_sections (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            object_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
+            name TEXT NOT NULL, is_active INTEGER DEFAULT 1,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+        """)
+        cols = [c[1] for c in db.execute("PRAGMA table_info(objects)").fetchall()]
+        if 'project_id' not in cols:
+            db.execute("ALTER TABLE objects ADD COLUMN project_id INTEGER")
+        cols_m = [c[1] for c in db.execute("PRAGMA table_info(meetings)").fetchall()]
+        if 'protocol_file' not in cols_m:
+            db.execute("ALTER TABLE meetings ADD COLUMN protocol_file TEXT")
+        # Create default projects from existing objects
+        cnt = db.execute("SELECT COUNT(*) FROM projects").fetchone()[0]
+        if cnt == 0:
+            db.execute("INSERT INTO projects (name) VALUES ('ЖК «Окла»')")
+            p1 = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+            db.execute("INSERT INTO projects (name) VALUES ('IQ Гатчина')")
+            p2 = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+            db.execute("UPDATE objects SET project_id=? WHERE name LIKE '%Окла%'", (p1,))
+            db.execute("UPDATE objects SET project_id=? WHERE name LIKE '%Гатчина%'", (p2,))
+        db.commit(); db.close()
+        return ok('Миграция v2 выполнена')
+    except Exception as e:
+        db.close(); return err(str(e))
+
+
 
 if __name__ == '__main__':
     init_db()
