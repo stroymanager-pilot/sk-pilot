@@ -823,7 +823,7 @@ function renderKS2() {
           <td style="padding:8px 4px;border-bottom:1px solid var(--surface2)">${k.contractor_name||'—'}</td>
           <td style="padding:8px 4px;border-bottom:1px solid var(--surface2)">${k.object_work||'—'}</td>
           <td style="padding:8px 4px;border-bottom:1px solid var(--surface2);font-family:var(--mono);text-align:center">${k.ks2_number||'—'}</td>
-          <td style="padding:8px 4px;border-bottom:1px solid var(--surface2);text-align:center;color:${k.has_ks6a?'var(--green)':'var(--text3)';font-weight:700}">${k.has_ks6a?'✓':'—'}</td>
+          <td style="padding:8px 4px;border-bottom:1px solid var(--surface2);text-align:center;color:${k.has_ks6a?'var(--green)':'var(--text3)'};font-weight:700">${k.has_ks6a?'✓':'—'}</td>
           <td style="padding:8px 4px;border-bottom:1px solid var(--surface2);text-align:center;color:${k.has_id?'var(--green)':'var(--text3)'};font-weight:700">${k.has_id?'✓':'—'}</td>
           ${!S.isReadonly?`<td style="padding:8px 4px;border-bottom:1px solid var(--surface2)"><button class="p-rm" onclick="deleteKS2(${k.id})">✕</button></td>`:''}</tr>`).join('')}
       </table>
