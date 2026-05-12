@@ -53,8 +53,8 @@ def create_object():
         return err('name обязателен')
     db = get_db()
     cur = db.execute(
-        "INSERT INTO objects (name, address, client_name, contract_number, tj_object_id) VALUES (?,?,?,?,?)",
-        (d['name'], d.get('address'), d.get('client_name'), d.get('contract_number'), d.get('tj_object_id'))
+        "INSERT INTO objects (name, address, client_name, contract_number, tj_object_id, project_id) VALUES (?,?,?,?,?,?)",
+        (d['name'], d.get('address'), d.get('client_name'), d.get('contract_number'), d.get('tj_object_id'), d.get('project_id'))
     )
     db.commit()
     row = db.execute("SELECT * FROM objects WHERE id=?", (cur.lastrowid,)).fetchone()

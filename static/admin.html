@@ -4,191 +4,309 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Администратор — Сводка СК</title>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
-:root { --bg:#f5f4f0; --surface:#fff; --border:#e0ddd6; --border-strong:#c8c4bb; --text:#1a1916; --text-muted:#7a7870; --accent:#d4380d; --green:#389e0d; --green-light:#f6ffed; --radius:4px; --mono:'IBM Plex Mono',monospace; --sans:'IBM Plex Sans',sans-serif; }
+:root{--navy:#0d1f3c;--navy2:#152c52;--navy3:#1e3d6e;--gold:#d4a843;--red:#c84040;--red-pale:#fde8e8;--green:#3a8c5c;--green-pale:#e4f2ec;--amber:#b87a10;--amber-pale:#fef3cd;--surface:#f0f3f9;--surface2:#e2e8f4;--border:#c8d2e8;--text:#0d1f3c;--text2:#4a5f80;--text3:#8098b8;--white:#fff;--r:10px;--r-sm:7px;--shadow:0 2px 12px rgba(13,31,60,.08);--font:'Golos Text',sans-serif;--mono:'JetBrains Mono',monospace;}
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14px;min-height:100vh;}
-.header{background:var(--text);color:white;padding:12px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;}
-.header-logo{font-family:var(--mono);font-size:11px;letter-spacing:0.15em;color:#aaa;}
-.header-title{flex:1;font-size:13px;font-weight:500;}
-.header-user{font-family:var(--mono);font-size:11px;color:#aaa;}
-.logout{font-family:var(--mono);font-size:11px;color:#aaa;cursor:pointer;padding:3px 8px;border:1px solid #444;border-radius:2px;}
-.logout:hover{color:white;border-color:#888;}
-.nav{background:var(--surface);border-bottom:1px solid var(--border);display:flex;overflow-x:auto;scrollbar-width:none;position:sticky;top:45px;z-index:99;}
-.nav::-webkit-scrollbar{display:none;}
-.nav-item{padding:10px 16px;font-size:12px;font-family:var(--mono);color:var(--text-muted);white-space:nowrap;cursor:pointer;border-bottom:2px solid transparent;}
-.nav-item:hover{color:var(--text);}
-.nav-item.active{color:var(--accent);border-bottom-color:var(--accent);}
-.main{padding:16px;max-width:720px;margin:0 auto;}
-.section{display:none;}.section.active{display:block;}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px;overflow:hidden;}
-.card-header{padding:10px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:#fafaf8;}
-.card-title{font-family:var(--mono);font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);}
+body{font-family:var(--font);background:var(--surface);color:var(--text);font-size:14px;min-height:100vh;}
+.layout{display:flex;min-height:100vh;}
+/* SIDEBAR */
+.sidebar{width:220px;background:var(--navy);flex-shrink:0;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto;}
+.sb-logo{padding:18px 16px 12px;border-bottom:1px solid rgba(255,255,255,.08);}
+.sb-mark{width:34px;height:34px;background:var(--gold);border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;font-weight:700;color:var(--navy);margin-bottom:8px;}
+.sb-name{font-size:13px;font-weight:700;color:#fff;}
+.sb-role{font-size:11px;color:rgba(255,255,255,.4);margin-top:2px;}
+.sb-section{padding:12px 0 4px;font-size:10px;font-weight:700;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.8px;padding-left:16px;}
+.sb-item{display:flex;align-items:center;gap:10px;padding:9px 16px;color:rgba(255,255,255,.55);cursor:pointer;font-size:13px;font-weight:500;border-left:3px solid transparent;transition:all .15s;}
+.sb-item:hover{color:#fff;background:rgba(255,255,255,.06);}
+.sb-item.active{color:#fff;background:rgba(255,255,255,.1);border-left-color:var(--gold);}
+.sb-item .ico{font-size:15px;width:20px;text-align:center;}
+.sb-bottom{margin-top:auto;padding:12px 16px;border-top:1px solid rgba(255,255,255,.08);}
+.logout-btn{width:100%;padding:8px;background:rgba(255,255,255,.08);border:none;border-radius:6px;color:rgba(255,255,255,.5);font-family:var(--font);font-size:12px;cursor:pointer;text-align:left;}
+.logout-btn:hover{color:#fff;background:rgba(255,255,255,.15);}
+/* MAIN */
+.content{flex:1;overflow-y:auto;padding:24px;}
+.page{display:none;}.page.active{display:block;}
+.page-h{font-size:22px;font-weight:800;color:var(--navy);margin-bottom:4px;}
+.page-d{font-size:13px;color:var(--text3);margin-bottom:20px;}
+/* CARDS */
+.card{background:#fff;border-radius:var(--r);border:1px solid var(--border);margin-bottom:14px;overflow:hidden;box-shadow:var(--shadow);}
+.card-h{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:#fafbfd;}
+.card-title{font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
 .card-body{padding:16px;}
-label{display:block;font-size:11px;font-family:var(--mono);color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em;}
-input,textarea,select{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--sans);font-size:13px;color:var(--text);background:var(--surface);outline:none;transition:border-color 0.15s;-webkit-appearance:none;}
-input:focus,textarea:focus,select:focus{border-color:var(--accent);}
-.form-row{margin-bottom:12px;}
-.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
-.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:var(--radius);font-size:13px;font-family:var(--sans);font-weight:500;cursor:pointer;border:none;transition:all 0.15s;}
-.btn-primary{background:var(--accent);color:white;}.btn-primary:hover{background:#b52b00;}
-.btn-ghost{background:transparent;color:var(--text-muted);border:1px solid var(--border);}.btn-ghost:hover{border-color:var(--border-strong);color:var(--text);}
-.btn-danger{background:transparent;color:var(--accent);border:1px solid var(--accent);}.btn-danger:hover{background:var(--accent);color:white;}
-.btn-sm{padding:5px 10px;font-size:12px;}
-.btn-xs{padding:3px 8px;font-size:11px;}
-.list-item{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);}
+/* LISTS */
+.list-item{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);transition:background .1s;}
 .list-item:last-child{border-bottom:none;}
-.list-item-text{flex:1;}
-.list-item-name{font-size:13px;font-weight:500;}
-.list-item-sub{font-size:11px;color:var(--text-muted);margin-top:2px;}
-.tag{display:inline-block;font-size:10px;font-family:var(--mono);padding:2px 6px;border-radius:2px;}
-.tag-on{background:var(--green-light);color:var(--green);}
-.tag-off{background:#f5f5f5;color:#999;}
-.toast{position:fixed;top:60px;right:16px;background:var(--text);color:white;padding:10px 16px;border-radius:var(--radius);font-size:13px;z-index:999;opacity:0;transform:translateY(-8px);transition:all 0.2s;pointer-events:none;}
+.list-item:hover{background:#fafbfd;}
+.list-avatar{width:36px;height:36px;border-radius:8px;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;font-weight:700;color:var(--navy3);}
+.list-body{flex:1;min-width:0;}
+.list-name{font-size:14px;font-weight:600;color:var(--text);}
+.list-sub{font-size:12px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.list-actions{display:flex;gap:6px;flex-shrink:0;}
+/* BADGES */
+.badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;}
+.badge-active{background:var(--green-pale);color:var(--green);}
+.badge-inactive{background:var(--surface2);color:var(--text3);}
+.badge-admin{background:#e8e0ff;color:#5b3fd1;}
+.badge-eng{background:#e0eaf8;color:var(--navy3);}
+.badge-type{background:var(--amber-pale);color:var(--amber);}
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:8px 14px;border-radius:var(--r-sm);border:none;font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;}
+.btn-primary{background:var(--navy);color:#fff;}.btn-primary:hover{background:var(--navy2);}
+.btn-danger{background:var(--red-pale);color:var(--red);border:1px solid #f5c0c0;}.btn-danger:hover{background:var(--red);color:#fff;}
+.btn-ghost{background:#fff;color:var(--text2);border:1px solid var(--border);}.btn-ghost:hover{border-color:var(--navy3);color:var(--navy);}
+.btn-sm{padding:5px 10px;font-size:12px;}
+.btn-xs{padding:3px 8px;font-size:11px;border-radius:4px;}
+/* FORM */
+.form-row{margin-bottom:12px;}
+label.fl{display:block;font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px;}
+input,select,textarea{width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-family:var(--font);font-size:14px;color:var(--text);background:#fff;outline:none;transition:border-color .15s;-webkit-appearance:none;}
+input:focus,select:focus,textarea:focus{border-color:var(--navy3);}
+textarea{resize:vertical;min-height:72px;}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='7'%3E%3Cpath d='M1 1l4.5 4.5L10 1' stroke='%234a5f80' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:30px;}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+/* MODAL */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;}
+.modal-bg.open{display:flex;}
+.modal{background:#fff;border-radius:var(--r);width:100%;max-width:560px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.2);}
+.modal-h{background:var(--navy);color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;}
+.modal-title{font-size:15px;font-weight:700;}
+.modal-close{background:none;border:none;color:rgba(255,255,255,.6);font-size:20px;cursor:pointer;line-height:1;}
+.modal-body{padding:20px;}
+.modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;}
+/* STATS GRID */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px;}
+.stat-card{background:#fff;border-radius:var(--r);border:1px solid var(--border);padding:16px;box-shadow:var(--shadow);}
+.stat-val{font-size:28px;font-weight:800;color:var(--navy);font-family:var(--mono);}
+.stat-lbl{font-size:12px;color:var(--text3);margin-top:4px;}
+/* REPORTS TABLE */
+.table{width:100%;border-collapse:collapse;}
+.table th{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;padding:8px 12px;border-bottom:2px solid var(--border);text-align:left;background:#fafbfd;}
+.table td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px;}
+.table tr:last-child td{border-bottom:none;}
+.table tr:hover td{background:#f8faff;cursor:pointer;}
+/* PHOTO GRID */
+.photo-grid-admin{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;}
+.photo-admin{background:var(--surface2);border-radius:var(--r-sm);overflow:hidden;border:1px solid var(--border);}
+.photo-admin img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block;}
+.photo-admin-info{padding:6px 8px;}
+.photo-admin-cap{font-size:11px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.photo-admin-meta{font-size:10px;color:var(--text3);margin-top:2px;}
+.photo-admin-del{width:100%;margin-top:6px;padding:4px;background:var(--red-pale);border:none;border-radius:4px;color:var(--red);font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);}
+.photo-admin-del:hover{background:var(--red);color:#fff;}
+/* TOAST */
+.toast{position:fixed;top:20px;right:20px;background:var(--navy);color:#fff;padding:10px 18px;border-radius:var(--r-sm);font-size:13px;font-weight:600;z-index:999;opacity:0;transform:translateY(-8px);transition:all .2s;pointer-events:none;box-shadow:0 4px 16px rgba(0,0,0,.2);}
 .toast.show{opacity:1;transform:translateY(0);}
-.toast.success{background:var(--green);}
-.empty{text-align:center;padding:28px;color:var(--text-muted);font-family:var(--mono);font-size:12px;}
-.reports-table{width:100%;border-collapse:collapse;}
-.reports-table th{font-family:var(--mono);font-size:10px;text-transform:uppercase;color:var(--text-muted);padding:8px 12px;text-align:left;border-bottom:1px solid var(--border);background:#fafaf8;}
-.reports-table td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px;}
-.reports-table tr:last-child td{border-bottom:none;}
-.reports-table tr:hover td{background:#fafaf8;cursor:pointer;}
-.status-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:5px;}
-.dot-submitted{background:var(--green);}
-.dot-draft{background:#f0a500;}
+.toast.ok{background:var(--green);}
+.toast.err{background:var(--red);}
+/* EMPTY */
+.empty{text-align:center;padding:32px;color:var(--text3);font-size:13px;}
+.empty-ico{font-size:32px;margin-bottom:8px;}
+/* FILTERS */
+.filters{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+.filters select{width:auto;font-size:12px;padding:6px 28px 6px 10px;}
 </style>
 </head>
 <body>
-<div class="header">
-  <span class="header-logo">СК</span>
-  <span class="header-title">Администратор</span>
-  <span class="header-user" id="headerUser"></span>
-  <span class="logout" onclick="logout()">Выйти</span>
-</div>
-<div class="nav">
-  <div class="nav-item active" data-section="object">Объект</div>
-  <div class="nav-item" data-section="sections">Корпуса</div>
-  <div class="nav-item" data-section="contractors">Подрядчики</div>
-  <div class="nav-item" data-section="engineers">Инженеры</div>
-  <div class="nav-item" data-section="reports">Реестр сводок</div>
-</div>
-<div class="main">
-
-  <!-- ОБЪЕКТ -->
-  <div class="section active" id="section-object">
-    <div class="card">
-      <div class="card-header"><span class="card-title">Настройки объекта</span></div>
-      <div class="card-body">
-        <div class="form-grid">
-          <div class="form-row"><label>Название объекта</label><input id="objName" placeholder="ЖК «Окла»"></div>
-          <div class="form-row"><label>Адрес</label><input id="objAddress" placeholder="г. Санкт-Петербург..."></div>
-        </div>
-        <div class="form-grid">
-          <div class="form-row"><label>Заказчик</label><input id="objClient" placeholder="ООО «СЗ «ЛСТ Эксперт»"></div>
-          <div class="form-row"><label>Номер договора</label><input id="objContract" placeholder="№ 46/15-06-22"></div>
-        </div>
-        <div class="form-row"><label>ID объекта в TeamJect (для интеграции)</label><input id="objTjId" placeholder="tj_okla_001"></div>
-        <div style="display:flex;gap:8px;margin-top:4px">
-          <button class="btn btn-primary btn-sm" onclick="saveObject()">Сохранить</button>
-        </div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="card-header"><span class="card-title">Место проведения совещаний (по умолчанию)</span></div>
-      <div class="card-body">
-        <div class="form-row"><label>Место</label><input id="meetingPlace" placeholder="Строительная площадка, вагончик прораба"></div>
-        <div class="form-row"><label>Время (по умолчанию)</label><input type="time" id="meetingTime"></div>
-        <div class="form-row"><label>Постоянные участники</label>
-          <textarea id="meetingParticipants" placeholder="Глуховской А.К. — инженер СК&#10;Иванов И.И. — прораб ООО «Пинстрой»" style="min-height:80px"></textarea>
-        </div>
-        <button class="btn btn-primary btn-sm" onclick="saveMeetingDefaults()">Сохранить</button>
-      </div>
-    </div>
+<div class="layout">
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="sb-logo">
+    <div class="sb-mark">СМ</div>
+    <div class="sb-name">Стройменеджер</div>
+    <div class="sb-role" id="sbRole">Администратор</div>
   </div>
-
-  <!-- КОРПУСА -->
-  <div class="section" id="section-sections">
-    <div class="card">
-      <div class="card-header">
-        <span class="card-title">Участки / Секции</span>
-        <button class="btn btn-ghost btn-sm" onclick="showAddSection()">+ Добавить</button>
-      </div>
-      <div id="sectionsList"></div>
-      <div id="addSectionForm" style="display:none;padding:12px 16px;border-top:1px solid var(--border);background:#fafaf8">
-        <div style="display:flex;gap:8px;align-items:center">
-          <input id="newSectionName" placeholder="Корпус 5.3.1 / Блок 2 / Секция А" style="flex:1">
-          <button class="btn btn-primary btn-sm" onclick="addSection()">Добавить</button>
-          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('addSectionForm').style.display='none'">Отмена</button>
-        </div>
-      </div>
-    </div>
+  <div class="sb-section">Главная</div>
+  <div class="sb-item active" data-page="dashboard" onclick="nav(this)"><span class="ico">📊</span> Дашборд</div>
+  <div class="sb-section">Структура</div>
+  <div class="sb-item" data-page="projects" onclick="nav(this)"><span class="ico">🏗</span> Проекты</div>
+  <div class="sb-item" data-page="partners" onclick="nav(this)"><span class="ico">🤝</span> Партнёры</div>
+  <div class="sb-item" data-page="engineers" onclick="nav(this)"><span class="ico">👷</span> Инженеры</div>
+  <div class="sb-section">Данные</div>
+  <div class="sb-item" data-page="reports" onclick="nav(this)"><span class="ico">📋</span> Все сводки</div>
+  <div class="sb-item" data-page="photos" onclick="nav(this)"><span class="ico">📷</span> Все фото</div>
+  <div class="sb-bottom">
+    <button class="logout-btn" onclick="logout()">← Выйти</button>
   </div>
-
-  <!-- ПОДРЯДЧИКИ -->
-  <div class="section" id="section-contractors">
-    <div class="card">
-      <div class="card-header">
-        <span class="card-title">Подрядчики</span>
-        <button class="btn btn-ghost btn-sm" onclick="showAddContractor()">+ Добавить</button>
-      </div>
-      <div id="contractorsList"></div>
-      <div id="addContractorForm" style="display:none;padding:14px 16px;border-top:1px solid var(--border);background:#fafaf8">
-        <div class="form-grid" style="margin-bottom:10px">
-          <div class="form-row" style="margin:0"><label>Название организации</label><input id="newContractorName" placeholder="ООО «Пинстрой»"></div>
-          <div class="form-row" style="margin:0"><label>Вид работ</label><input id="newContractorWork" placeholder="Армирование и бетонирование"></div>
-        </div>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-primary btn-sm" onclick="addContractor()">Добавить</button>
-          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('addContractorForm').style.display='none'">Отмена</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ИНЖЕНЕРЫ -->
-  <div class="section" id="section-engineers">
-    <div class="card">
-      <div class="card-header">
-        <span class="card-title">Инженеры на объекте</span>
-        <button class="btn btn-ghost btn-sm" onclick="showAddEngineer()">+ Назначить</button>
-      </div>
-      <div id="engineersList"></div>
-      <div id="addEngineerForm" style="display:none;padding:14px 16px;border-top:1px solid var(--border);background:#fafaf8">
-        <div class="form-row"><label>Выберите пользователя</label>
-          <select id="newEngineerSelect"></select>
-        </div>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-primary btn-sm" onclick="addEngineer()">Назначить</button>
-          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('addEngineerForm').style.display='none'">Отмена</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- РЕЕСТР СВОДОК -->
-  <div class="section" id="section-reports">
-    <div class="card">
-      <div class="card-header">
-        <span class="card-title">Реестр ежедневных сводок</span>
-        <select id="filterEngineer" onchange="loadReports()" style="width:auto;font-size:12px;padding:4px 8px">
-          <option value="">Все инженеры</option>
-        </select>
-      </div>
-      <div id="reportsList"><div class="empty">Загрузка...</div></div>
-    </div>
-  </div>
-
 </div>
 
-<!-- MODAL просмотра сводки -->
-<div id="reportModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;overflow-y:auto;padding:20px">
-  <div style="background:var(--surface);border-radius:var(--radius);max-width:680px;margin:0 auto;overflow:hidden">
-    <div style="background:var(--text);color:white;padding:12px 16px;display:flex;align-items:center;gap:12px">
-      <span style="flex:1;font-size:13px;font-weight:500" id="modalTitle">Сводка</span>
-      <button onclick="closeModal()" style="background:none;border:none;color:white;font-size:18px;cursor:pointer">✕</button>
+<!-- CONTENT -->
+<div class="content">
+
+<!-- ДАШБОРД -->
+<div class="page active" id="page-dashboard">
+  <div class="page-h">Дашборд</div>
+  <div class="page-d" id="dashDate"></div>
+  <div class="stats" id="dashStats">
+    <div class="stat-card"><div class="stat-val" id="statProjects">—</div><div class="stat-lbl">Проектов</div></div>
+    <div class="stat-card"><div class="stat-val" id="statObjects">—</div><div class="stat-lbl">Объектов</div></div>
+    <div class="stat-card"><div class="stat-val" id="statEngineers">—</div><div class="stat-lbl">Инженеров</div></div>
+    <div class="stat-card"><div class="stat-val" id="statReports">—</div><div class="stat-lbl">Сводок сегодня</div></div>
+  </div>
+  <div class="card">
+    <div class="card-h"><span class="card-title">Последние сводки</span></div>
+    <div id="dashReports"><div class="empty">Загрузка...</div></div>
+  </div>
+</div>
+
+<!-- ПРОЕКТЫ -->
+<div class="page" id="page-projects">
+  <div class="page-h">Проекты</div>
+  <div class="page-d">Управление проектами и объектами внутри них</div>
+  <div style="margin-bottom:14px">
+    <button class="btn btn-primary" onclick="openModal('project')">+ Добавить проект</button>
+  </div>
+  <div id="projectsList"><div class="empty">Загрузка...</div></div>
+</div>
+
+<!-- ПАРТНЁРЫ -->
+<div class="page" id="page-partners">
+  <div class="page-h">Партнёры</div>
+  <div class="page-d">Заказчики, генподрядчики, субподрядчики</div>
+  <div style="margin-bottom:14px">
+    <button class="btn btn-primary" onclick="openModal('partner')">+ Добавить партнёра</button>
+  </div>
+  <div id="partnersList"><div class="empty">Загрузка...</div></div>
+</div>
+
+<!-- ИНЖЕНЕРЫ -->
+<div class="page" id="page-engineers">
+  <div class="page-h">Инженеры</div>
+  <div class="page-d">Пользователи системы и их назначения на объекты</div>
+  <div style="margin-bottom:14px">
+    <button class="btn btn-primary" onclick="openModal('engineer')">+ Добавить инженера</button>
+  </div>
+  <div id="engineersList"><div class="empty">Загрузка...</div></div>
+</div>
+
+<!-- ВСЕ СВОДКИ -->
+<div class="page" id="page-reports">
+  <div class="page-h">Все сводки</div>
+  <div class="page-d">Сводки всех инженеров по всем проектам</div>
+  <div class="filters">
+    <select id="filterProject" onchange="loadAllReports()"><option value="">Все проекты</option></select>
+    <select id="filterEngineer" onchange="loadAllReports()"><option value="">Все инженеры</option></select>
+    <select id="filterStatus" onchange="loadAllReports()">
+      <option value="">Все статусы</option>
+      <option value="draft">Черновик</option>
+      <option value="submitted">Сдана</option>
+    </select>
+  </div>
+  <div class="card">
+    <div class="card-h"><span class="card-title" id="reportsCount">Сводки</span></div>
+    <div id="reportsList"><div class="empty">Загрузка...</div></div>
+  </div>
+</div>
+
+<!-- ВСЕ ФОТО -->
+<div class="page" id="page-photos">
+  <div class="page-h">Управление фото</div>
+  <div class="page-d">Просмотр, скачивание и удаление фотографий</div>
+  <div class="filters">
+    <select id="filterPhotoProject" onchange="loadAllPhotos()"><option value="">Все проекты</option></select>
+  </div>
+  <div id="photoStats" style="margin-bottom:12px;font-size:13px;color:var(--text3)"></div>
+  <div class="photo-grid-admin" id="photoGridAdmin"></div>
+  <div id="photoEmpty" class="empty" style="display:none"><div class="empty-ico">📷</div>Нет фотографий</div>
+</div>
+
+</div><!-- /content -->
+</div><!-- /layout -->
+
+<!-- MODAL ПРОЕКТ -->
+<div class="modal-bg" id="modal-project">
+  <div class="modal">
+    <div class="modal-h">
+      <span class="modal-title" id="modalProjectTitle">Новый проект</span>
+      <button class="modal-close" onclick="closeModal('project')">✕</button>
     </div>
-    <div id="modalBody" style="padding:16px"></div>
+    <div class="modal-body">
+      <input type="hidden" id="editProjectId">
+      <div class="form-row"><label class="fl">Название проекта</label><input id="projName" placeholder="ЖК «Окла»"></div>
+      <div class="form-row"><label class="fl">Описание</label><textarea id="projDesc" placeholder="Жилой комплекс..."></textarea></div>
+      <div class="form-row"><label class="fl">ID в TeamJect</label><input id="projTj" placeholder="Для интеграции"></div>
+      <div style="margin-top:16px"><strong style="font-size:13px">Объекты в проекте:</strong></div>
+      <div id="projObjectsList" style="margin:10px 0"></div>
+      <button class="btn btn-ghost btn-sm" onclick="addObjectToProject()">+ Добавить объект</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('project')">Отмена</button>
+      <button class="btn btn-primary" onclick="saveProject()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ПАРТНЁР -->
+<div class="modal-bg" id="modal-partner">
+  <div class="modal">
+    <div class="modal-h">
+      <span class="modal-title" id="modalPartnerTitle">Новый партнёр</span>
+      <button class="modal-close" onclick="closeModal('partner')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editPartnerId">
+      <div class="row2">
+        <div class="form-row"><label class="fl">Название организации</label><input id="partName" placeholder="ООО «Пинстрой»"></div>
+        <div class="form-row"><label class="fl">Тип</label>
+          <select id="partType">
+            <option>Заказчик</option><option>Генподрядчик</option>
+            <option>Субподрядчик</option><option>Проектировщик</option><option>Другое</option>
+          </select>
+        </div>
+      </div>
+      <div class="row2">
+        <div class="form-row"><label class="fl">Контактное лицо</label><input id="partContact" placeholder="Иванов Иван Иванович"></div>
+        <div class="form-row"><label class="fl">Должность</label><input id="partRole" placeholder="Руководитель объекта"></div>
+      </div>
+      <div class="row2">
+        <div class="form-row"><label class="fl">ИНН</label><input id="partInn" placeholder="7812345678"></div>
+        <div class="form-row"><label class="fl">Телефон</label><input id="partPhone" placeholder="+7 (812) 123-45-67"></div>
+      </div>
+      <div class="form-row"><label class="fl">Email</label><input id="partEmail" placeholder="info@company.ru"></div>
+      <div class="form-row"><label class="fl">Адрес</label><input id="partAddr" placeholder="г. Санкт-Петербург..."></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('partner')">Отмена</button>
+      <button class="btn btn-primary" onclick="savePartner()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ИНЖЕНЕР -->
+<div class="modal-bg" id="modal-engineer">
+  <div class="modal">
+    <div class="modal-h">
+      <span class="modal-title">Добавить инженера</span>
+      <button class="modal-close" onclick="closeModal('engineer')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row"><label class="fl">ФИО</label><input id="engName" placeholder="Глуховской Александр Константинович"></div>
+      <div class="row2">
+        <div class="form-row"><label class="fl">Email</label><input id="engEmail" placeholder="engineer@stroymanager.ru"></div>
+        <div class="form-row"><label class="fl">Роль</label>
+          <select id="engRole"><option value="engineer">Инженер СК</option><option value="senior">Главный инженер</option><option value="admin">Администратор</option></select>
+        </div>
+      </div>
+      <div class="form-row"><label class="fl">Назначить на объект</label>
+        <select id="engObject"><option value="">— не назначать —</option></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('engineer')">Отмена</button>
+      <button class="btn btn-primary" onclick="saveEngineer()">Добавить</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ПРОСМОТР СВОДКИ -->
+<div class="modal-bg" id="modal-report">
+  <div class="modal" style="max-width:700px">
+    <div class="modal-h">
+      <span class="modal-title" id="modalReportTitle">Сводка</span>
+      <button class="modal-close" onclick="closeModal('report')">✕</button>
+    </div>
+    <div class="modal-body" id="modalReportBody" style="max-height:70vh;overflow-y:auto"></div>
   </div>
 </div>
 
@@ -196,303 +314,458 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent);}
 
 <script>
 const API = 'https://sk-pilot.onrender.com';
-const OBJ_ID = 1;
-let objectData = null;
-let allUsers = [];
+const today = new Date().toISOString().split('T')[0];
 
-// Auth check
-const role = sessionStorage.getItem('userRole');
-const userName = sessionStorage.getItem('userName');
-if (!role) window.location.href = '/login.html';
-document.getElementById('headerUser').textContent = userName || '';
-
+// Auth
+if (!sessionStorage.getItem('userId')) window.location.href = '/login.html';
+const userId = sessionStorage.getItem('userId');
+const userRole = sessionStorage.getItem('userRole');
+const userName = sessionStorage.getItem('userName') || 'Администратор';
+if (userRole !== 'admin') window.location.href = '/report.html';
 function logout() { sessionStorage.clear(); window.location.href = '/login.html'; }
+
+document.getElementById('sbRole').textContent = userName;
+document.getElementById('dashDate').textContent = new Date().toLocaleDateString('ru-RU', {weekday:'long',day:'numeric',month:'long',year:'numeric'});
+
+let state = { projects:[], objects:[], users:[], partners:[] };
+let editingProjectObjects = []; // temp state for project modal
 
 function toast(msg, type='') {
   const t = document.getElementById('toast');
-  t.textContent = msg; t.className = 'toast show '+(type||'');
-  setTimeout(()=>t.className='toast', 2500);
+  t.textContent = msg; t.className = 'toast show ' + type;
+  setTimeout(()=>t.className='toast', 2800);
 }
 
-document.querySelectorAll('.nav-item').forEach(item=>{
-  item.addEventListener('click',()=>{
-    document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));
-    document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
-    item.classList.add('active');
-    const sec = item.dataset.section;
-    document.getElementById('section-'+sec).classList.add('active');
-    if (sec==='reports') loadReports();
-  });
-});
+// ── NAV ──
+function nav(el) {
+  document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  el.classList.add('active');
+  const page = el.dataset.page;
+  document.getElementById('page-'+page).classList.add('active');
+  if (page==='dashboard') loadDashboard();
+  else if (page==='projects') loadProjects();
+  else if (page==='partners') loadPartners();
+  else if (page==='engineers') loadEngineers();
+  else if (page==='reports') loadAllReports();
+  else if (page==='photos') loadAllPhotos();
+}
 
+// ── MODALS ──
+function openModal(name) { document.getElementById('modal-'+name).classList.add('open'); }
+function closeModal(name) { document.getElementById('modal-'+name).classList.remove('open'); }
+
+// ── INIT ──
 async function init() {
-  const [objRes, usersRes] = await Promise.all([
-    fetch(`${API}/api/objects/${OBJ_ID}`).then(r=>r.json()),
+  const [projRes, usersRes, partnersRes] = await Promise.all([
+    fetch(`${API}/api/projects`).then(r=>r.json()),
     fetch(`${API}/api/users`).then(r=>r.json()),
+    fetch(`${API}/api/partners`).then(r=>r.json()),
   ]);
-  objectData = objRes.data;
-  allUsers = usersRes.data;
-  fillObjectForm();
-  renderSections();
-  renderContractors();
-  renderEngineers();
-  fillEngineerFilter();
-}
+  state.projects = projRes.data || [];
+  state.users = usersRes.data || [];
+  state.partners = partnersRes.data || [];
 
-function fillObjectForm() {
-  const o = objectData;
-  document.getElementById('objName').value = o.name||'';
-  document.getElementById('objAddress').value = o.address||'';
-  document.getElementById('objClient').value = o.client_name||'';
-  document.getElementById('objContract').value = o.contract_number||'';
-  document.getElementById('objTjId').value = o.tj_object_id||'';
-  const defaults = JSON.parse(localStorage.getItem('meetingDefaults')||'{}');
-  document.getElementById('meetingDay') && (document.getElementById('meetingDay').value = defaults.day||'');
-  document.getElementById('meetingPlace').value = defaults.location||'';
-  document.getElementById('meetingTime').value = defaults.time||'';
-  document.getElementById('meetingParticipants').value = defaults.participants||'';
-}
+  // Load all objects
+  const objPromises = state.projects.map(p => fetch(`${API}/api/projects/${p.id}/objects`).then(r=>r.json()));
+  const objResults = await Promise.all(objPromises);
+  state.objects = objResults.flatMap(r => r.data || []);
 
-async function saveObject() {
-  const data = {
-    name: document.getElementById('objName').value,
-    address: document.getElementById('objAddress').value,
-    client_name: document.getElementById('objClient').value,
-    contract_number: document.getElementById('objContract').value,
-    tj_object_id: document.getElementById('objTjId').value,
-  };
-  await fetch(`${API}/api/objects/${OBJ_ID}`, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
-  toast('Объект сохранён', 'success');
-}
-
-function saveMeetingDefaults() {
-  const defaults = {
-    day: document.getElementById('meetingDay').value,
-    location: document.getElementById('meetingPlace').value,
-    time: document.getElementById('meetingTime').value,
-    participants: document.getElementById('meetingParticipants').value,
-  };
-  localStorage.setItem('meetingDefaults', JSON.stringify(defaults));
-  toast('Настройки совещания сохранены', 'success');
-}
-
-// SECTIONS
-function renderSections() {
-  const list = document.getElementById('sectionsList');
-  const sections = objectData.sections;
-  if (!sections.length) { list.innerHTML='<div class="empty">Корпуса не добавлены</div>'; return; }
-  list.innerHTML = sections.map(s=>`
-    <div class="list-item">
-      <div class="list-item-text">
-        <div class="list-item-name">${s.name}</div>
-      </div>
-      <span class="tag ${s.is_active?'tag-on':'tag-off'}">${s.is_active?'активен':'неактивен'}</span>
-      <button class="btn btn-xs btn-ghost" style="margin-left:6px" onclick="toggleSection(${s.id},${s.is_active})">
-        ${s.is_active?'Деактивировать':'Активировать'}
-      </button>
-    </div>`).join('');
-}
-
-function showAddSection() { document.getElementById('addSectionForm').style.display='block'; document.getElementById('newSectionName').focus(); }
-
-async function addSection() {
-  const name = document.getElementById('newSectionName').value.trim();
-  if (!name) return;
-  const r = await fetch(`${API}/api/objects/${OBJ_ID}/sections`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})}).then(r=>r.json());
-  objectData.sections.push(r.data);
-  document.getElementById('newSectionName').value='';
-  document.getElementById('addSectionForm').style.display='none';
-  renderSections(); toast('Корпус добавлен','success');
-}
-
-async function toggleSection(id, current) {
-  await fetch(`${API}/api/sections/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({is_active:current?0:1})});
-  const s = objectData.sections.find(s=>s.id===id);
-  if (s) s.is_active = current?0:1;
-  renderSections();
-}
-
-// CONTRACTORS
-function renderContractors() {
-  const list = document.getElementById('contractorsList');
-  const contractors = objectData.contractors;
-  if (!contractors.length) { list.innerHTML='<div class="empty">Подрядчики не добавлены</div>'; return; }
-  list.innerHTML = contractors.map(c=>`
-    <div class="list-item">
-      <div class="list-item-text">
-        <div class="list-item-name">${c.name}</div>
-        <div class="list-item-sub">${c.work_type||'—'}</div>
-      </div>
-      <span class="tag ${c.is_active?'tag-on':'tag-off'}">${c.is_active?'активен':'неактивен'}</span>
-      <button class="btn btn-xs btn-ghost" style="margin-left:6px" onclick="toggleContractor(${c.id},${c.is_active})">
-        ${c.is_active?'Деактивировать':'Активировать'}
-      </button>
-    </div>`).join('');
-}
-
-function showAddContractor() { document.getElementById('addContractorForm').style.display='block'; document.getElementById('newContractorName').focus(); }
-
-async function addContractor() {
-  const name = document.getElementById('newContractorName').value.trim();
-  if (!name) return;
-  const work = document.getElementById('newContractorWork').value.trim();
-  const r = await fetch(`${API}/api/objects/${OBJ_ID}/contractors`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,work_type:work})}).then(r=>r.json());
-  objectData.contractors.push(r.data);
-  document.getElementById('newContractorName').value='';
-  document.getElementById('newContractorWork').value='';
-  document.getElementById('addContractorForm').style.display='none';
-  renderContractors(); toast('Подрядчик добавлен','success');
-}
-
-async function toggleContractor(id, current) {
-  await fetch(`${API}/api/contractors/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({is_active:current?0:1})});
-  const c = objectData.contractors.find(c=>c.id===id);
-  if (c) c.is_active = current?0:1;
-  renderContractors();
-}
-
-// ENGINEERS
-function renderEngineers() {
-  const list = document.getElementById('engineersList');
-  const engineers = objectData.engineers;
-  if (!engineers.length) { list.innerHTML='<div class="empty">Инженеры не назначены</div>'; return; }
-  list.innerHTML = engineers.map(e=>`
-    <div class="list-item">
-      <div class="list-item-text">
-        <div class="list-item-name">${e.full_name}</div>
-        <div class="list-item-sub">${e.email} · ${e.role==='admin'?'Администратор':e.role==='senior'?'Главный инженер':'Инженер СК'}</div>
-      </div>
-    </div>`).join('');
-}
-
-function showAddEngineer() {
-  const sel = document.getElementById('newEngineerSelect');
-  sel.innerHTML = allUsers.map(u=>`<option value="${u.id}">${u.full_name} (${u.email})</option>`).join('');
-  document.getElementById('addEngineerForm').style.display='block';
-}
-
-async function addEngineer() {
-  const uid = parseInt(document.getElementById('newEngineerSelect').value);
-  await fetch(`${API}/api/objects/${OBJ_ID}/assign_user`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid})});
-  const user = allUsers.find(u=>u.id===uid);
-  if (user && !objectData.engineers.find(e=>e.id===uid)) objectData.engineers.push(user);
-  document.getElementById('addEngineerForm').style.display='none';
-  renderEngineers(); toast('Инженер назначен','success');
-}
-
-function fillEngineerFilter() {
-  const sel = document.getElementById('filterEngineer');
-  objectData.engineers.forEach(e=>{
-    const opt = document.createElement('option');
-    opt.value = e.id; opt.textContent = e.full_name; sel.appendChild(opt);
+  // Fill filter selects
+  ['filterProject','filterPhotoProject'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    state.projects.forEach(p => {
+      const o = document.createElement('option');
+      o.value = p.id; o.textContent = p.name; sel.appendChild(o);
+    });
   });
+  const fesel = document.getElementById('filterEngineer');
+  if (fesel) state.users.filter(u=>u.role!=='admin').forEach(u => {
+    const o = document.createElement('option'); o.value=u.id; o.textContent=u.full_name; fesel.appendChild(o);
+  });
+
+  // Fill engineer object select
+  const eosel = document.getElementById('engObject');
+  state.objects.forEach(o => {
+    const opt = document.createElement('option'); opt.value=o.id; opt.textContent=o.name; eosel.appendChild(opt);
+  });
+
+  loadDashboard();
 }
 
-// REPORTS
-async function loadReports() {
-  const list = document.getElementById('reportsList');
-  list.innerHTML = '<div class="empty">Загрузка...</div>';
-  const r = await fetch(`${API}/api/objects/${OBJ_ID}/reports`).then(r=>r.json());
-  let reports = r.data || [];
-  const filterUid = document.getElementById('filterEngineer').value;
-  if (filterUid) reports = reports.filter(r=>r.user_id==filterUid);
-  if (!reports.length) { list.innerHTML='<div class="empty">Сводок нет</div>'; return; }
-  list.innerHTML = `<table class="reports-table">
-    <tr><th>Дата</th><th>Инженер</th><th>Статус</th><th>Создана</th></tr>
-    ${reports.map(r=>`<tr onclick="openReport(${r.id})" data-date="${r.report_date}" data-eng="${r.engineer_name||''}" style="cursor:pointer">
-      <td style="font-family:var(--mono)">${r.report_date}</td>
-      <td>${r.engineer_name}</td>
-      <td><span class="status-dot ${r.status==='submitted'?'dot-submitted':'dot-draft'}"></span>${r.status==='submitted'?'Сдана':'Черновик'}</td>
-      <td style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">${r.created_at?.slice(0,16)||'—'}</td>
-    </tr>`).join('')}
-  </table>`;
+// ── DASHBOARD ──
+async function loadDashboard() {
+  document.getElementById('statProjects').textContent = state.projects.length;
+  document.getElementById('statObjects').textContent = state.objects.length;
+  document.getElementById('statEngineers').textContent = state.users.filter(u=>u.role!=='admin').length;
+
+  const rep = await fetch(`${API}/api/all_reports`).then(r=>r.json());
+  const all = rep.data || [];
+  const todayReps = all.filter(r=>r.report_date===today);
+  document.getElementById('statReports').textContent = todayReps.length;
+
+  const recent = all.slice(0,10);
+  document.getElementById('dashReports').innerHTML = recent.length ? `
+    <table class="table">
+      <tr><th>Дата</th><th>Инженер</th><th>Проект</th><th>Объект</th><th>Статус</th></tr>
+      ${recent.map(r=>`<tr onclick="openReport(${r.id},'${r.report_date}','${r.engineer_name||''}')">
+        <td style="font-family:var(--mono)">${r.report_date}</td>
+        <td>${r.engineer_name||'—'}</td>
+        <td>${r.project_name||'—'}</td>
+        <td>${r.object_name||'—'}</td>
+        <td><span class="badge ${r.status==='submitted'?'badge-active':'badge-type'}">${r.status==='submitted'?'Сдана':'Черновик'}</span></td>
+      </tr>`).join('')}
+    </table>` : '<div class="empty">Сводок нет</div>';
+}
+
+// ── ПРОЕКТЫ ──
+async function loadProjects() {
+  const res = await fetch(`${API}/api/projects`).then(r=>r.json());
+  state.projects = res.data || [];
+  const el = document.getElementById('projectsList');
+  if (!state.projects.length) { el.innerHTML='<div class="empty"><div class="empty-ico">🏗</div>Проектов нет</div>'; return; }
+
+  el.innerHTML = '';
+  for (const p of state.projects) {
+    const objRes = await fetch(`${API}/api/projects/${p.id}/objects`).then(r=>r.json());
+    const objs = objRes.data || [];
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="card-h">
+        <span class="card-title">🏗 ${p.name}</span>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-ghost btn-sm" onclick="editProject(${p.id})">✏ Редактировать</button>
+          <button class="btn btn-ghost btn-sm" onclick="addObjectModal(${p.id})">+ Объект</button>
+        </div>
+      </div>
+      <div class="card-body" style="padding:0">
+        ${p.description?`<div style="padding:8px 16px;font-size:13px;color:var(--text3);border-bottom:1px solid var(--border)">${p.description}</div>`:''}
+        ${objs.length ? objs.map(o=>`
+          <div class="list-item">
+            <div class="list-avatar">🏢</div>
+            <div class="list-body">
+              <div class="list-name">${o.name}</div>
+              <div class="list-sub">${o.address||''} ${o.engineers?'· '+o.engineers:''}</div>
+            </div>
+            <div class="list-actions">
+              <button class="btn btn-ghost btn-xs" onclick="editObject(${o.id},${p.id})">✏</button>
+              <button class="btn btn-ghost btn-xs" onclick="assignEngineerToObject(${o.id})">👷</button>
+            </div>
+          </div>`).join('')
+        : '<div class="empty" style="padding:16px">Нет объектов</div>'}
+      </div>`;
+    el.appendChild(card);
+  }
+}
+
+function openModal_project_new() {
+  document.getElementById('editProjectId').value = '';
+  document.getElementById('projName').value = '';
+  document.getElementById('projDesc').value = '';
+  document.getElementById('projTj').value = '';
+  document.getElementById('projObjectsList').innerHTML = '';
+  document.getElementById('modalProjectTitle').textContent = 'Новый проект';
+  editingProjectObjects = [];
+  openModal('project');
+}
+
+async function editProject(id) {
+  const p = state.projects.find(p=>p.id===id);
+  if (!p) return;
+  document.getElementById('editProjectId').value = id;
+  document.getElementById('projName').value = p.name;
+  document.getElementById('projDesc').value = p.description||'';
+  document.getElementById('projTj').value = p.tj_project_id||'';
+  document.getElementById('modalProjectTitle').textContent = 'Редактировать проект';
+  openModal('project');
+}
+
+async function saveProject() {
+  const id = document.getElementById('editProjectId').value;
+  const data = { name:document.getElementById('projName').value.trim(),
+    description:document.getElementById('projDesc').value,
+    tj_project_id:document.getElementById('projTj').value };
+  if (!data.name) { toast('Укажите название проекта','err'); return; }
+  if (id) {
+    await fetch(`${API}/api/projects/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  } else {
+    await fetch(`${API}/api/projects`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  }
+  closeModal('project'); toast('Проект сохранён','ok'); await init(); loadProjects();
+}
+
+async function addObjectModal(projectId) {
+  const name = prompt('Название объекта (например: Многоквартирный дом, уч.6):');
+  if (!name) return;
+  const address = prompt('Адрес:') || '';
+  const client = prompt('Заказчик:') || '';
+  await fetch(`${API}/api/objects`,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({name,address,client_name:client,project_id:projectId})});
+  toast('Объект добавлен','ok'); await init(); loadProjects();
+}
+
+async function editObject(objId, projId) {
+  const obj = state.objects.find(o=>o.id===objId);
+  if (!obj) return;
+  const name = prompt('Название объекта:', obj.name);
+  if (!name) return;
+  const address = prompt('Адрес:', obj.address||'') || '';
+  await fetch(`${API}/api/objects/${objId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({name,address})});
+  toast('Объект обновлён','ok'); await init(); loadProjects();
+}
+
+async function assignEngineerToObject(objId) {
+  const obj = state.objects.find(o=>o.id===objId);
+  const engineers = state.users.filter(u=>u.role!=='admin');
+  const list = engineers.map((e,i)=>`${i+1}. ${e.full_name}`).join('\n');
+  const choice = prompt(`Назначить инженера на объект "${obj?.name}":\n${list}\nВведите номер:`);
+  if (!choice) return;
+  const idx = parseInt(choice)-1;
+  if (idx<0||idx>=engineers.length) { toast('Неверный номер','err'); return; }
+  await fetch(`${API}/api/objects/${objId}/assign_user`,{method:'POST',
+    headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:engineers[idx].id})});
+  toast(`${engineers[idx].full_name} назначен на объект`,'ok'); await init(); loadProjects();
+}
+
+// ── ПАРТНЁРЫ ──
+async function loadPartners() {
+  const res = await fetch(`${API}/api/partners`).then(r=>r.json());
+  state.partners = res.data || [];
+  const el = document.getElementById('partnersList');
+  if (!state.partners.length) { el.innerHTML='<div class="card"><div class="empty"><div class="empty-ico">🤝</div>Партнёров нет</div></div>'; return; }
+  el.innerHTML = `<div class="card"><div style="padding:0">${state.partners.map(p=>`
+    <div class="list-item">
+      <div class="list-avatar">${p.type==='Заказчик'?'🏛':p.type==='Генподрядчик'?'🏗':'🔧'}</div>
+      <div class="list-body">
+        <div class="list-name">${p.name}</div>
+        <div class="list-sub">${p.type||''} ${p.contact_name?'· '+p.contact_name:''} ${p.phone?'· '+p.phone:''}</div>
+      </div>
+      <div class="list-actions">
+        <span class="badge badge-type">${p.type||'—'}</span>
+        <button class="btn btn-ghost btn-xs" onclick="editPartner(${p.id})">✏</button>
+        <button class="btn btn-danger btn-xs" onclick="deletePartner(${p.id})">✕</button>
+      </div>
+    </div>`).join('')}</div></div>`;
+}
+
+async function savePartner() {
+  const id = document.getElementById('editPartnerId').value;
+  const data = {name:document.getElementById('partName').value.trim(),type:document.getElementById('partType').value,
+    contact_name:document.getElementById('partContact').value,contact_role:document.getElementById('partRole').value,
+    inn:document.getElementById('partInn').value,phone:document.getElementById('partPhone').value,
+    email:document.getElementById('partEmail').value,address:document.getElementById('partAddr').value};
+  if (!data.name) { toast('Укажите название','err'); return; }
+  if (id) await fetch(`${API}/api/partners/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  else await fetch(`${API}/api/partners`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  closeModal('partner'); toast('Сохранено','ok'); loadPartners();
+}
+
+function editPartner(id) {
+  const p = state.partners.find(p=>p.id===id);
+  if (!p) return;
+  document.getElementById('editPartnerId').value = id;
+  document.getElementById('partName').value = p.name||'';
+  document.getElementById('partType').value = p.type||'Заказчик';
+  document.getElementById('partContact').value = p.contact_name||'';
+  document.getElementById('partRole').value = p.contact_role||'';
+  document.getElementById('partInn').value = p.inn||'';
+  document.getElementById('partPhone').value = p.phone||'';
+  document.getElementById('partEmail').value = p.email||'';
+  document.getElementById('partAddr').value = p.address||'';
+  document.getElementById('modalPartnerTitle').textContent = 'Редактировать партнёра';
+  openModal('partner');
+}
+
+async function deletePartner(id) {
+  if (!confirm('Удалить партнёра?')) return;
+  await fetch(`${API}/api/partners/${id}`,{method:'DELETE'});
+  toast('Удалено','ok'); loadPartners();
+}
+
+// ── ИНЖЕНЕРЫ ──
+async function loadEngineers() {
+  const el = document.getElementById('engineersList');
+  const engineers = state.users;
+  if (!engineers.length) { el.innerHTML='<div class="card"><div class="empty">Нет инженеров</div></div>'; return; }
+  el.innerHTML = `<div class="card"><div style="padding:0">${engineers.map(u=>{
+    const initials = u.full_name.split(' ').slice(0,2).map(n=>n[0]).join('');
+    const roleLabel = u.role==='admin'?'Администратор':u.role==='senior'?'Главный инженер':'Инженер СК';
+    const badgeClass = u.role==='admin'?'badge-admin':'badge-eng';
+    return `<div class="list-item">
+      <div class="list-avatar">${initials}</div>
+      <div class="list-body">
+        <div class="list-name">${u.full_name}</div>
+        <div class="list-sub">${u.email}</div>
+      </div>
+      <span class="badge ${badgeClass}">${roleLabel}</span>
+    </div>`;
+  }).join('')}</div></div>`;
+}
+
+async function saveEngineer() {
+  const name = document.getElementById('engName').value.trim();
+  const email = document.getElementById('engEmail').value.trim();
+  const role = document.getElementById('engRole').value;
+  const objId = document.getElementById('engObject').value;
+  if (!name||!email) { toast('Заполните ФИО и email','err'); return; }
+  const r = await fetch(`${API}/api/users`,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({full_name:name,email,role,password:'password123'})}).then(r=>r.json());
+  if (!r.ok) { toast('Ошибка: '+r.error,'err'); return; }
+  if (objId) {
+    await fetch(`${API}/api/objects/${objId}/assign_user`,{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:r.data.id})});
+  }
+  closeModal('engineer'); toast('Инженер добавлен','ok'); await init(); loadEngineers();
+}
+
+// ── ВСЕ СВОДКИ ──
+async function loadAllReports() {
+  const projId = document.getElementById('filterProject').value;
+  const userId = document.getElementById('filterEngineer').value;
+  let url = `${API}/api/all_reports?`;
+  if (projId) url += `project_id=${projId}&`;
+  if (userId) url += `user_id=${userId}&`;
+  const res = await fetch(url).then(r=>r.json());
+  let reports = res.data || [];
+  const status = document.getElementById('filterStatus').value;
+  if (status) reports = reports.filter(r=>r.status===status);
+  document.getElementById('reportsCount').textContent = `Сводки (${reports.length})`;
+  document.getElementById('reportsList').innerHTML = reports.length ? `
+    <table class="table">
+      <tr><th>Дата</th><th>Инженер</th><th>Проект</th><th>Объект</th><th>Статус</th></tr>
+      ${reports.map(r=>`<tr onclick="openReport(${r.id},'${r.report_date}','${(r.engineer_name||'').replace(/'/g,'')}')" style="cursor:pointer">
+        <td style="font-family:var(--mono)">${r.report_date}</td>
+        <td>${r.engineer_name||'—'}</td>
+        <td>${r.project_name||'—'}</td>
+        <td>${r.object_name||'—'}</td>
+        <td><span class="badge ${r.status==='submitted'?'badge-active':'badge-type'}">${r.status==='submitted'?'Сдана':'Черновик'}</span></td>
+      </tr>`).join('')}
+    </table>` : '<div class="empty">Сводок нет</div>';
 }
 
 async function openReport(id) {
-  document.getElementById('reportModal').style.display = 'block';
-  document.getElementById('modalTitle').textContent = 'Загрузка...';
-  document.getElementById('modalBody').innerHTML = '<div style="text-align:center;padding:40px;color:#888">Загрузка сводки...</div>';
-  document.getElementById('modalBody').innerHTML = '<div class="empty">Загрузка...</div>';
+  openModal('report');
+  document.getElementById('modalReportBody').innerHTML='<div class="empty">Загрузка...</div>';
   const r = await fetch(`${API}/api/reports/${id}`).then(r=>r.json());
   const d = r.data;
-  document.getElementById('modalTitle').textContent = `Сводка · ${d.report_date} · ${d.engineer_name}`;
-
-  const personnel = d.personnel?.filter(p=>p.headcount>0)||[];
+  document.getElementById('modalReportTitle').textContent = `Сводка · ${d.report_date} · ${d.engineer_name}`;
+  const personnel = (d.personnel||[]).filter(p=>p.headcount>0);
   const remarks = d.verbal_remarks||[];
   const prescriptions = d.prescriptions_log||[];
   const inputControl = d.input_control||[];
   const meetings = d.meetings||[];
   const photos = d.photos||[];
-
-  document.getElementById('modalBody').innerHTML = `
+  const ac = d.acceptance_control||[];
+  const ks2 = d.ks2_check||[];
+  document.getElementById('modalReportBody').innerHTML = `
     <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
-      ${[['Инженер',d.engineer_name],['Дата',d.report_date],['Статус',d.status==='submitted'?'Сдана':'Черновик']].map(([l,v])=>`
-      <div style="background:var(--bg);padding:8px 12px;border-radius:3px;flex:1;min-width:120px">
-        <div style="font-size:10px;font-family:var(--mono);color:var(--text-muted);margin-bottom:2px">${l}</div>
-        <div style="font-size:13px;font-weight:500">${v}</div>
-      </div>`).join('')}
-    </div>
-
-    ${personnel.length?`
-    <div style="margin-bottom:16px">
-      <div style="font-family:var(--mono);font-size:11px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Персонал</div>
-      ${personnel.map(p=>`<div style="padding:6px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between">
-        <div><div style="font-size:13px;font-weight:500">${p.contractor_name}</div><div style="font-size:11px;color:var(--text-muted)">${p.section_name||''} · ${p.work_description||''}</div></div>
-        <div style="font-family:var(--mono);font-size:16px;font-weight:500;min-width:32px;text-align:right">${p.headcount}</div>
-      </div>`).join('')}
-    </div>`:''}
-
-    ${inputControl.length?`
-    <div style="margin-bottom:16px">
-      <div style="font-family:var(--mono);font-size:11px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Входной контроль</div>
-      ${inputControl.map(ic=>`<div style="padding:6px 0;border-bottom:1px solid var(--border)">
-        <div style="font-size:13px;font-weight:500">${ic.material_name}</div>
-        <div style="font-size:11px;color:var(--text-muted)">${ic.quantity} · ${ic.document_name}</div>
-        ${ic.deviation_note?`<div style="font-size:11px;color:var(--accent)">⚠ ${ic.deviation_note}</div>`:''}
-      </div>`).join('')}
-    </div>`:''}
-
-    ${remarks.length?`
-    <div style="margin-bottom:16px">
-      <div style="font-family:var(--mono);font-size:11px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Замечания (${remarks.filter(r=>r.status==='open').length} открытых)</div>
-      ${remarks.map(r=>`<div style="padding:6px 0;border-bottom:1px solid var(--border);display:flex;gap:8px">
-        <div style="width:7px;height:7px;border-radius:50%;margin-top:5px;flex-shrink:0;background:${r.status==='open'?'var(--accent)':'var(--green)'}"></div>
-        <div><div style="font-size:13px">${r.description}</div>
-        <div style="font-size:11px;color:var(--text-muted)">${r.section_name||''} ${r.deadline?'· срок: '+r.deadline:''}</div></div>
-      </div>`).join('')}
-    </div>`:''}
-
-    ${prescriptions.length?`
-    <div style="margin-bottom:16px">
-      <div style="font-family:var(--mono);font-size:11px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Предписания</div>
-      ${prescriptions.map(p=>`<div style="padding:6px 0;border-bottom:1px solid var(--border)">
-        <span style="font-family:var(--mono)">${p.number}</span> · ${p.issue_date} · ${p.status}
-      </div>`).join('')}
-    </div>`:''}
-
-    ${meetings.length?`
-    <div style="margin-bottom:16px">
-      <div style="font-family:var(--mono);font-size:11px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Совещание</div>
-      ${meetings.map(m=>`<div style="font-size:13px"><strong>${m.location}</strong> · ${m.time}<br>
-        <div style="font-size:12px;color:var(--text-muted);white-space:pre-line;margin-top:4px">${m.participants||''}</div>
-      </div>`).join('')}
-    </div>`:''}
-
-    ${photos.length?`
-    <div style="margin-bottom:16px">
-      <div style="font-family:var(--mono);font-size:11px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Фото (${photos.length})</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
-        ${photos.map(p=>`<div style="border-radius:3px;overflow:hidden;border:1px solid var(--border)">
-          <img src="${API}/uploads/${p.file_path}" style="width:100%;aspect-ratio:1;object-fit:cover">
-          ${p.caption?`<div style="padding:4px 6px;font-size:11px;color:var(--text-muted)">${p.caption}</div>`:''}
+      ${[['Инженер',d.engineer_name],['Дата',d.report_date],['Объект',d.object_name],
+         ['Статус',d.status==='submitted'?'✅ Сдана':'📝 Черновик']].map(([l,v])=>`
+        <div style="background:var(--surface);padding:8px 12px;border-radius:6px;flex:1;min-width:120px">
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase">${l}</div>
+          <div style="font-size:13px;font-weight:600;margin-top:2px">${v||'—'}</div>
         </div>`).join('')}
-      </div>
-    </div>`:''}
-  `;
+    </div>
+    ${personnel.length?section('👷 Персонал', personnel.map(p=>`
+      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+        <div><div style="font-size:13px;font-weight:600">${p.contractor_name}</div>
+        <div style="font-size:11px;color:var(--text3)">${p.section_name||''} · ${p.work_description||''}</div></div>
+        <div style="font-family:var(--mono);font-size:18px;font-weight:700">${p.headcount}</div>
+      </div>`).join('')):''}
+    ${inputControl.length?section('📦 Входной контроль', inputControl.map(ic=>`
+      <div style="padding:6px 0;border-bottom:1px solid var(--border)">
+        <div style="font-weight:600">${ic.material_name}</div>
+        <div style="font-size:12px;color:var(--text3)">${ic.quantity||'—'} · ${ic.document_name||'—'}</div>
+        ${ic.deviation_note?`<div style="font-size:12px;color:var(--red)">⚠ ${ic.deviation_note}</div>`:
+          '<div style="font-size:12px;color:var(--green)">✓ Норма</div>'}
+      </div>`).join('')):''}
+    ${remarks.length?section(`⚠️ Замечания (${remarks.filter(r=>r.status==='open').length} открытых)`, remarks.map(r=>`
+      <div style="padding:6px 0;border-bottom:1px solid var(--border);display:flex;gap:8px">
+        <div style="width:8px;height:8px;border-radius:50%;margin-top:4px;flex-shrink:0;background:${r.status==='open'?'var(--red)':'var(--green)'}"></div>
+        <div><div style="font-size:13px">${r.description}</div>
+        <div style="font-size:11px;color:var(--text3)">${r.section_name||''} ${r.deadline?'· срок: '+r.deadline:''}</div></div>
+      </div>`).join('')):''}
+    ${prescriptions.length?section('📋 Предписания', prescriptions.map(p=>`
+      <div style="padding:5px 0;border-bottom:1px solid var(--border);font-size:13px">
+        <span style="font-family:var(--mono);font-weight:600">${p.number}</span> · ${p.issue_date||'—'} · ${p.status||'—'}
+      </div>`).join('')):''}
+    ${ac.length?section('✅ Приёмочный контроль', ac.map(o=>`
+      <div style="padding:6px 0;border-bottom:1px solid var(--border)">
+        <div style="font-weight:600">${o.work_stage}</div>
+        <div style="font-size:12px;color:var(--text3)">${o.section_name||''} · ${o.controlled_operations||'—'}</div>
+      </div>`).join('')):''}
+    ${ks2.length?section('📑 ИД / КС-2', `<table style="width:100%;font-size:12px;border-collapse:collapse">
+      <tr><th style="text-align:left;padding:4px;border-bottom:1px solid var(--border)">Организация</th>
+      <th style="text-align:left;padding:4px;border-bottom:1px solid var(--border)">Вид работ</th>
+      <th style="padding:4px;border-bottom:1px solid var(--border)">КС-2</th>
+      <th style="padding:4px;border-bottom:1px solid var(--border)">КС-6а</th>
+      <th style="padding:4px;border-bottom:1px solid var(--border)">ИД</th></tr>
+      ${ks2.map(k=>`<tr>
+        <td style="padding:5px 4px;border-bottom:1px solid var(--border)">${k.contractor_name}</td>
+        <td style="padding:5px 4px;border-bottom:1px solid var(--border)">${k.object_work||'—'}</td>
+        <td style="padding:5px 4px;border-bottom:1px solid var(--border);text-align:center;font-family:var(--mono)">${k.ks2_number||'—'}</td>
+        <td style="padding:5px 4px;border-bottom:1px solid var(--border);text-align:center">${k.has_ks6a?'✓':'—'}</td>
+        <td style="padding:5px 4px;border-bottom:1px solid var(--border);text-align:center">${k.has_id?'✓':'—'}</td>
+      </tr>`).join('')}
+    </table>`):''}
+    ${meetings.length?section('🤝 Совещание', meetings.map(m=>`
+      <div style="font-size:13px"><strong>${m.location||'—'}</strong> · ${m.time||'—'}<br>
+      <div style="white-space:pre-line;font-size:12px;color:var(--text3);margin-top:4px">${m.participants||''}</div>
+      ${m.agenda?`<div style="font-size:12px;color:var(--text3);margin-top:4px"><em>${m.agenda}</em></div>`:''}
+      </div>`).join('')):''}
+    ${photos.length?section(`📷 Фото (${photos.length})`, `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+      ${photos.map(p=>`<div style="border-radius:6px;overflow:hidden;border:1px solid var(--border)">
+        <img src="${API}/uploads/${p.file_path}" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block">
+        ${p.caption?`<div style="padding:4px 6px;font-size:11px;color:var(--text3)">${p.caption}</div>`:''}
+      </div>`).join('')}
+    </div>`):''}`;
 }
 
-function closeModal() { document.getElementById('reportModal').style.display='none'; }
+function section(title, content) {
+  return `<div style="margin-bottom:14px">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);letter-spacing:.5px;margin-bottom:8px">${title}</div>
+    ${content}
+  </div>`;
+}
 
+// ── ВСЕ ФОТО ──
+async function loadAllPhotos() {
+  const projId = document.getElementById('filterPhotoProject').value;
+  let url = `${API}/api/all_photos?`;
+  if (projId) url += `project_id=${projId}`;
+  const res = await fetch(url).then(r=>r.json());
+  const photos = res.data || [];
+  document.getElementById('photoStats').textContent = `Всего фотографий: ${photos.length}`;
+  const grid = document.getElementById('photoGridAdmin');
+  const empty = document.getElementById('photoEmpty');
+  if (!photos.length) { grid.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  grid.innerHTML = photos.map(p=>`
+    <div class="photo-admin" id="ph-${p.id}">
+      <img src="${API}/uploads/${p.file_path}" alt="" onerror="this.parentNode.style.display='none'">
+      <div class="photo-admin-info">
+        <div class="photo-admin-cap">${p.caption||'Без подписи'}</div>
+        <div class="photo-admin-meta">${p.engineer_name||'—'} · ${p.report_date||'—'}</div>
+        <div class="photo-admin-meta">${p.object_name||'—'}</div>
+        <div style="display:flex;gap:4px;margin-top:6px">
+          <a href="${API}/uploads/${p.file_path}" download class="btn btn-ghost btn-xs" style="text-decoration:none;flex:1;justify-content:center">⬇ Скачать</a>
+          <button class="btn btn-danger btn-xs" onclick="deletePhoto(${p.id})">✕</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+async function deletePhoto(id) {
+  if (!confirm('Удалить фото? Это действие нельзя отменить.')) return;
+  await fetch(`${API}/api/photos/${id}`,{method:'DELETE'});
+  document.getElementById('ph-'+id)?.remove();
+  toast('Фото удалено','ok');
+}
+
+// ── START ──
 init();
 </script>
 </body>
