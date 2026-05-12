@@ -161,6 +161,15 @@ def init_db():
         uploaded_at     TEXT DEFAULT (datetime('now'))
     );
 
+    -- УЧАСТКИ (персональные разделы инженера по объекту)
+    CREATE TABLE IF NOT EXISTS user_sections (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            object_id   INTEGER NOT NULL REFERENCES objects(id),
+                user_id     INTEGER NOT NULL REFERENCES users(id),
+                    name        TEXT NOT NULL,
+                        is_active   INTEGER DEFAULT 1
+                        );
+
     -- ─────────────────────────────────────────────
     -- ИНДЕКСЫ для быстрых запросов
     -- ─────────────────────────────────────────────
