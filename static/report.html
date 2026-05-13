@@ -78,17 +78,22 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 .rm-dot.closed{background:var(--green)}
 .close-btn{display:inline-block;margin-top:6px;font-size:12px;font-weight:700;color:var(--green);cursor:pointer;padding:3px 10px;border:1.5px solid var(--green);border-radius:20px}
 /* PHOTO */
-.photo-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
-@media(min-width:500px){.photo-grid{grid-template-columns:repeat(3,1fr)}}
+.photo-grid{display:grid;grid-template-columns:1fr;gap:16px}@media(min-width:500px){.photo-grid{grid-template-columns:repeat(2,1fr)}}
 .photo-thumb{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden}
-.photo-thumb img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block}
+.photo-thumb img{width:100%;aspect-ratio:16/10;object-fit:cover;display:block}
 .photo-cap-wrap{padding:8px 10px;border-top:1px solid var(--border);background:#fff;display:flex;gap:6px;align-items:center}
-.photo-cap-input{border:none;padding:0;font-size:13px;color:var(--text2);background:transparent;flex:1;font-family:var(--font)}
+.photo-cap-input{border:none;border-bottom:1.5px solid var(--border);padding:2px 0 4px;font-size:13px;color:var(--text2);background:transparent;flex:1;font-family:var(--font);transition:border-color .15s}
 .photo-cap-input:focus{outline:none;color:var(--text)}
 .photo-rm-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;padding:0 2px;flex-shrink:0}
 .photo-rm-btn:hover{color:var(--red)}
-.photo-add-btn{aspect-ratio:4/3;border:2px dashed var(--border);border-radius:var(--r-sm);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;color:var(--text3);font-size:12px;font-weight:600;gap:6px;background:transparent;transition:all .15s;font-family:var(--font)}
+.photo-add-btn{aspect-ratio:16/10;border:2px dashed var(--border);border-radius:var(--r-sm);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;color:var(--text3);font-size:12px;font-weight:600;gap:6px;background:transparent;transition:all .15s;font-family:var(--font)}
 .photo-add-btn:hover{border-color:var(--navy3);color:var(--navy3)}
+/* PROTOCOL UPLOAD */
+.protocol-upload{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface);border:1.5px dashed var(--border);border-radius:var(--r-sm);cursor:pointer;transition:all .15s}
+.protocol-upload:hover{border-color:var(--navy3)}
+.protocol-file{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--green-pale);border:1px solid var(--green);border-radius:var(--r-sm);font-size:13px;font-weight:600;color:var(--green)}
+.protocol-file a{color:var(--green);text-decoration:none;flex:1}
+.protocol-file button{background:none;border:none;color:var(--green);cursor:pointer;font-size:16px;padding:0}
 /* SECTIONS MANAGER */
 .sec-chip{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;background:var(--surface2);border-radius:20px;font-size:12px;font-weight:600;margin:3px;border:1px solid var(--border)}
 .sec-chip button{background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:0;line-height:1}
@@ -231,6 +236,7 @@ const STEPS = [
 let currentStep = 0;
 let S = {objectId:null,reportId:null,report:null,object:null,contractors:[],sections:[],
   mySections:[],remarks:[],prescriptions:[],inputControl:[],photos:[],meetingId:null,
+  meetingProtocol:null,meetingProtocolName:null,
   acceptanceControl:[],ks2Check:[],personnel:[],isReadonly:false};
 function esc(v){if(v==null)return '';return String(v).replace(/`/g,'\\`').replace(/\$\{/g,'\\${');}
 
@@ -239,13 +245,26 @@ let _meetingData = {day:'',loc:'',time:'',part:'',agenda:''};
 
 function fmtDate(d){if(!d)return'—';if(/^\d{8}$/.test(d))return d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6,8);return d;}
 function toast(msg,type=''){const t=document.getElementById('toast');t.textContent=msg;t.className='toast show '+type;setTimeout(()=>t.className='toast',2800);}
+async function fetchWithRetry(url, opts={}, retries=3, delay=2000) {
+  for (let i=0; i<retries; i++) {
+    try {
+      const r = await fetch(url, opts);
+      if (r.ok || r.status < 500) return r;
+      if (i < retries-1) await new Promise(res=>setTimeout(res, delay));
+    } catch(e) {
+      if (i < retries-1) await new Promise(res=>setTimeout(res, delay));
+      else throw e;
+    }
+  }
+  throw new Error('Server unavailable');
+}
 function setSaving(on){document.getElementById('syncDot').className='sync-dot'+(on?' saving':'');}
 function openModal(name){document.getElementById('modal-'+name).classList.add('open');}
 function closeModal(name){document.getElementById('modal-'+name).classList.remove('open');}
 
 async function init() {
   try {
-    const objRes = await fetch(`${API}/api/users/${userId}/objects`).then(r=>r.json());
+    const objRes = await fetchWithRetry(`${API}/api/users/${userId}/objects`).then(r=>r.json());
     const userObjs = objRes.data || [];
     if (!userObjs.length) {
       document.getElementById('main').innerHTML='<div class="card"><div style="padding:20px;text-align:center;color:var(--red)"><strong>Нет назначенных объектов</strong><br><br>Обратитесь к администратору.</div></div>';
@@ -259,9 +278,9 @@ async function init() {
       showObjectPicker(userObjs); return;
     }
     const [objDetail, repList, mySecs] = await Promise.all([
-      fetch(`${API}/api/objects/${S.objectId}`).then(r=>r.json()),
-      fetch(`${API}/api/objects/${S.objectId}/reports`).then(r=>r.json()),
-      fetch(`${API}/api/objects/${S.objectId}/my_sections?user_id=${userId}`).then(r=>r.json()),
+      fetchWithRetry(`${API}/api/objects/${S.objectId}`).then(r=>r.json()),
+      fetchWithRetry(`${API}/api/objects/${S.objectId}/reports`).then(r=>r.json()),
+      fetchWithRetry(`${API}/api/objects/${S.objectId}/my_sections?user_id=${userId}`).then(r=>r.json()),
     ]);
     S.object = objDetail.data;
     S.contractors = S.object.contractors.filter(c=>c.is_active);
@@ -330,6 +349,8 @@ async function loadReport() {
   const m = r.data.meetings?.[0];
   if (m) {
     S.meetingId = m.id;
+    S.meetingProtocol = m.protocol_path || null;
+    S.meetingProtocolName = m.protocol_name || null;
     const parts = (m.location||'').split(' | ');
     const days = ['Понедельник','Вторник','Среда','Четверг','Пятница','Суббота','Воскресенье'];
     if (days.includes(parts[0])) { _meetingData.day=parts[0]; _meetingData.loc=parts.slice(1).join(' | '); }
@@ -560,13 +581,17 @@ function renderInput() {
         </div>
         <div class="row2">
           <div><label class="fl">Документ о качестве</label><input id="icDoc" placeholder="Паспорт № 123..."></div>
+          <div><label class="fl">Участок</label><select id="icSec">${sectionOpts()}</select></div>
+        </div>
+        <div class="row2">
           <div><label class="fl">Статус</label>
             <select id="icStatus" onchange="document.getElementById('icDevRow').style.display=this.value?'block':'none'">
               <option value="">✓ Норма</option><option value="Отклонение выявлено">⚠ Отклонение</option><option value="Материал отклонён">✕ Отклонён</option>
             </select>
           </div>
+          <div></div>
         </div>
-        <div id="icDevRow" style="display:none"><label class="fl">Описание отклонения</label><textarea id="icDev" style="min-height:52px"></textarea></div>
+        <div id="icDevRow" style="display:none"><label class="fl">Описание отклонения / замечание</label><textarea id="icDev" style="min-height:52px" placeholder="Опишите отклонение или замечание..."></textarea></div>
         <button class="btn-p" style="margin-top:10px" onclick="saveIC()">+ Добавить</button>
       </div>
     </div>`:''}
@@ -578,6 +603,7 @@ function renderInput() {
             <div>
               <div style="font-size:14px;font-weight:600">${esc(ic.material_name)}</div>
               <div style="font-size:12px;color:var(--text3)">${esc(ic.quantity)||'—'} · ${esc(ic.document_name)||'—'}</div>
+              <div style="font-size:12px;color:var(--text3);margin-top:1px">${esc(ic.section_name)||''}</div>
               ${ic.deviation_note?`<div style="font-size:12px;color:var(--red);margin-top:2px">⚠ ${esc(ic.deviation_note)}</div>`:`<div style="font-size:12px;color:var(--green);margin-top:2px">✓ Норма</div>`}
             </div>
             ${!S.isReadonly?`<button class="p-rm" onclick="deleteIC(${ic.id})">✕</button>`:''}
@@ -594,6 +620,7 @@ async function saveIC() {
   const r=await fetch(`${API}/api/reports/${S.reportId}/input_control`,{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({material_name:mat,quantity:document.getElementById('icQty').value,
       document_name:document.getElementById('icDoc').value,
+      section_id:document.getElementById('icSec')?.value||null,
       deviation_note:document.getElementById('icStatus').value?document.getElementById('icDev').value:'',
       engineer_id:userId})}).then(r=>r.json());
   S.inputControl.push(r.data); setSaving(false); toast('Добавлено','ok'); showStep(currentStep);
@@ -620,6 +647,20 @@ function renderOCsection(title, ico, items, addFn, delFn, stageId, opsId, method
           <div><label class="fl">Метод контроля</label><textarea id="${methodId}" style="min-height:52px"></textarea></div>
         </div>
         <label class="fl">Участок</label><select id="${secId}">${sectionOpts(S.allSections[0]?.id)}</select>
+        <div class="row2" style="margin-top:10px">
+          <div><label class="fl no-mt">Статус</label>
+            <select id="${secId}_status" onchange="document.getElementById('${secId}_devrow').style.display=this.value?'block':'none'">
+              <option value="">✓ Норма</option>
+              <option value="Отклонение выявлено">⚠ Отклонение</option>
+              <option value="Работы остановлены">✕ Остановлено</option>
+            </select>
+          </div>
+          <div></div>
+        </div>
+        <div id="${secId}_devrow" style="display:none;margin-top:8px">
+          <label class="fl no-mt">Замечание / описание отклонения</label>
+          <textarea id="${secId}_dev" style="min-height:52px" placeholder="Опишите замечание..."></textarea>
+        </div>
         <button class="btn-p" style="margin-top:10px" onclick="${addFn}()">+ Добавить</button>
       </div>
     </div>`:''}
@@ -632,6 +673,7 @@ function renderOCsection(title, ico, items, addFn, delFn, stageId, opsId, method
             ${!S.isReadonly?`<button class="p-rm" onclick="${delFn}(${o.id})">✕</button>`:''}
           </div>
           <div style="font-size:12px;color:var(--text3);margin-top:3px">Операции: ${esc(o.controlled_operations)||'—'}<br>Метод: ${esc(o.control_method)||'—'}</div>
+          ${o.deviation_note?`<div style="font-size:12px;color:var(--red);margin-top:3px">⚠ ${esc(o.deviation_note)}</div>`:(o.status?'':`<div style="font-size:12px;color:var(--green);margin-top:3px">✓ Норма</div>`)}
         </div>`).join(''):'<div class="empty">Нет записей</div>'}
     </div>`;
 }
@@ -648,9 +690,13 @@ async function saveOC() {
   const stage=document.getElementById('ocStage').value.trim();
   if (!stage) { toast('Укажите этап','err'); return; }
   setSaving(true);
+  const ocStatusEl=document.getElementById('ocSec_status');
+  const ocDevEl=document.getElementById('ocSec_dev');
   await fetch(`${API}/api/reports/${S.reportId}/operational_control`,{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({work_stage:stage,controlled_operations:document.getElementById('ocOps').value,
-      control_method:document.getElementById('ocMethod').value,section_id:document.getElementById('ocSec').value,engineer_id:userId})});
+      control_method:document.getElementById('ocMethod').value,section_id:document.getElementById('ocSec').value,
+      status:ocStatusEl?.value||'',deviation_note:ocStatusEl?.value&&ocDevEl?ocDevEl.value:'',
+      engineer_id:userId})});
   const r=await fetch(`${API}/api/reports/${S.reportId}`).then(r=>r.json());
   if(S.report)S.report.operational_control=r.data.operational_control;
   setSaving(false); toast('Сохранено','ok'); showStep(currentStep);
@@ -666,9 +712,13 @@ async function saveAC() {
   const stage=document.getElementById('acStage').value.trim();
   if (!stage) { toast('Укажите этап','err'); return; }
   setSaving(true);
+  const acStatusEl=document.getElementById('acSec_status');
+  const acDevEl=document.getElementById('acSec_dev');
   const r=await fetch(`${API}/api/reports/${S.reportId}/acceptance_control`,{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({work_stage:stage,controlled_operations:document.getElementById('acOps').value,
-      control_method:document.getElementById('acMethod').value,section_id:document.getElementById('acSec').value,engineer_id:userId})}).then(r=>r.json());
+      control_method:document.getElementById('acMethod').value,section_id:document.getElementById('acSec').value,
+      status:acStatusEl?.value||'',deviation_note:acStatusEl?.value&&acDevEl?acDevEl.value:'',
+      engineer_id:userId})}).then(r=>r.json());
   S.acceptanceControl.push(r.data); setSaving(false); toast('Сохранено','ok'); showStep(currentStep);
 }
 async function deleteAC(id) {
@@ -857,6 +907,16 @@ function loadMeetingDefaults() {
   if(!_meetingData.time&&d.time) _meetingData.time=d.time;
   if(!_meetingData.part&&d.participants) _meetingData.part=d.participants;
   if(!_meetingData.day&&d.day) _meetingData.day=d.day;
+  if(!_meetingData.date&&d.date) _meetingData.date=d.date;
+}
+function formatMeetingDate(d) {
+  if(!d) return '—';
+  const days=['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
+  const dt=new Date(d);
+  const dd=String(dt.getDate()).padStart(2,'0');
+  const mm=String(dt.getMonth()+1).padStart(2,'0');
+  const yyyy=dt.getFullYear();
+  return `${dd}.${mm}.${yyyy} (${days[dt.getDay()]})`;
 }
 
 function renderMeeting() {
@@ -865,7 +925,7 @@ function renderMeeting() {
     <div class="readonly-banner">✅ Сводка сдана — редактирование недоступно</div>
     <div class="card">
       <div class="card-h"><div class="ico">🤝</div>Данные совещания</div>
-      <div class="info-row"><span class="info-lbl">День</span><span>${_meetingData.day||'—'}</span></div>
+      <div class="info-row"><span class="info-lbl">Дата</span><span>${_meetingData.date?formatMeetingDate(_meetingData.date):(_meetingData.day||'—')}</span></div>
       <div class="info-row"><span class="info-lbl">Время</span><span>${_meetingData.time||'—'}</span></div>
       <div class="info-row"><span class="info-lbl">Место</span><span>${_meetingData.loc||'—'}</span></div>
       <div style="padding:9px 0;font-size:14px;white-space:pre-line">${_meetingData.part||'—'}</div>
@@ -876,11 +936,8 @@ function renderMeeting() {
     <div class="card">
       <div class="card-h"><div class="ico">🤝</div>Данные совещания</div>
       <div class="row2">
-        <div><label class="fl no-mt">День недели</label>
-          <select id="mDay">
-            <option value="">— не проводилось —</option>
-            ${['Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'].map(d=>`<option${_meetingData.day===d?' selected':''}>${d}</option>`).join('')}
-          </select>
+        <div><label class="fl no-mt">Дата совещания</label>
+          <input type="date" id="mDate" value="${_meetingData.date||''}">
         </div>
         <div><label class="fl no-mt">Время начала</label><input type="time" id="mTime" value="${_meetingData.time}"></div>
       </div>
@@ -893,6 +950,23 @@ function renderMeeting() {
         <button class="btn-p" onclick="saveMeeting(false)">💾 Сохранить</button>
         <button class="btn-s" onclick="clearMeeting()">Очистить</button>
       </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><div class="ico">📄</div>Протокол совещания</div>
+      ${S.meetingProtocol?`
+        <div class="protocol-file">
+          <span>📎</span>
+          <a href="${API}/uploads/${S.meetingProtocol}" target="_blank">${S.meetingProtocolName||'Протокол.pdf'}</a>
+          <button onclick="removeProtocol()">✕</button>
+        </div>`:`
+        <label class="protocol-upload">
+          <span style="font-size:22px">📎</span>
+          <div>
+            <div style="font-size:14px;font-weight:600;color:var(--text)">Загрузить протокол</div>
+            <div style="font-size:12px;color:var(--text3)">PDF, DOC, DOCX — до 20 МБ</div>
+          </div>
+          <input type="file" accept=".pdf,.doc,.docx" style="display:none" onchange="uploadProtocol(event)">
+        </label>`}
     </div>`;
 }
 
@@ -912,12 +986,13 @@ function restoreMeetingFields() {
 async function saveMeeting(silent=false) {
   if (S.isReadonly) return;
   const day=document.getElementById('mDay')?.value||'';
+  const date=document.getElementById('mDate')?.value||'';
   const loc=document.getElementById('mLoc')?.value||'';
   const time=document.getElementById('mTime')?.value||'';
   const part=document.getElementById('mPart')?.value||'';
   const agenda=document.getElementById('mAgenda')?.value||'';
-  _meetingData={day,loc,time,part,agenda};
-  const location=day?(day+(loc?' | '+loc:'')):(loc||'');
+  _meetingData={day,date,loc,time,part,agenda};
+  const location=date?(formatMeetingDate(date)+(loc?' | '+loc:'')):(day?(day+(loc?' | '+loc:'')):(loc||''));
   if(!location&&!part)return;
   setSaving(true);
   const data={location,time,participants:part,agenda,engineer_id:userId};
@@ -958,6 +1033,26 @@ function renderPhotos() {
     </div>`;
 }
 
+async function uploadProtocol(e) {
+  if (S.isReadonly) return;
+  const file = e.target.files[0]; if (!file) return;
+  await saveMeeting(true);
+  const fd = new FormData(); fd.append('file', file);
+  setSaving(true);
+  const r = await fetch(`${API}/api/meetings/${S.meetingId}/protocol`, {method:'POST', body:fd}).then(r=>r.json());
+  if (r.ok) {
+    S.meetingProtocol = r.data.file_path;
+    S.meetingProtocolName = r.data.original_name || file.name;
+    toast('Протокол загружен','ok');
+  } else { toast('Ошибка загрузки','err'); }
+  setSaving(false); showStep(currentStep);
+}
+async function removeProtocol() {
+  if (S.isReadonly || !confirm('Удалить протокол?')) return;
+  await fetch(`${API}/api/meetings/${S.meetingId}/protocol`, {method:'DELETE'});
+  S.meetingProtocol = null; S.meetingProtocolName = null;
+  toast('Протокол удалён','ok'); showStep(currentStep);
+}
 async function handlePhotos(e) {
   if (S.isReadonly) return;
   const files=Array.from(e.target.files);
