@@ -357,46 +357,39 @@ function closeModal(name) { document.getElementById('modal-'+name).classList.rem
 
 // ── INIT ──
 async function init() {
-  const [projRes, usersRes, partnersRes] = await Promise.all([
-    fetch(`${API}/api/projects`).then(r=>r.json()),
-    fetch(`${API}/api/users`).then(r=>r.json()),
-    fetch(`${API}/api/partners`).then(r=>r.json()),
-  ]);
-  state.projects = projRes.data || [];
-  state.users = usersRes.data || [];
-  state.partners = partnersRes.data || [];
+  try {
+    const [usersRes, partnersRes, objectsRes] = await Promise.all([
+      fetch(`${API}/api/users`).then(r=>r.json()).catch(()=>({data:[]})),
+      fetch(`${API}/api/partners`).then(r=>r.json()).catch(()=>({data:[]})),
+      fetch(`${API}/api/objects`).then(r=>r.json()).catch(()=>({data:[]})),
+    ]);
+    state.projects = [];
+    state.users = usersRes.data || [];
+    state.partners = partnersRes.data || [];
+    state.objects = objectsRes.data || [];
 
-  // Load all objects
-  const objPromises = state.projects.map(p => fetch(`${API}/api/projects/${p.id}/objects`).then(r=>r.json()));
-  const objResults = await Promise.all(objPromises);
-  state.objects = objResults.flatMap(r => r.data || []);
-
-  // Fill filter selects
-  ['filterProject','filterPhotoProject'].forEach(id => {
-    const sel = document.getElementById(id);
-    if (!sel) return;
-    state.projects.forEach(p => {
-      const o = document.createElement('option');
-      o.value = p.id; o.textContent = p.name; sel.appendChild(o);
+    // Fill filter selects
+    const fesel = document.getElementById('filterEngineer');
+    if (fesel) state.users.filter(u=>u.role!=='admin').forEach(u => {
+      const o = document.createElement('option'); o.value=u.id; o.textContent=u.full_name; fesel.appendChild(o);
     });
-  });
-  const fesel = document.getElementById('filterEngineer');
-  if (fesel) state.users.filter(u=>u.role!=='admin').forEach(u => {
-    const o = document.createElement('option'); o.value=u.id; o.textContent=u.full_name; fesel.appendChild(o);
-  });
 
-  // Fill engineer object select
-  const eosel = document.getElementById('engObject');
-  state.objects.forEach(o => {
-    const opt = document.createElement('option'); opt.value=o.id; opt.textContent=o.name; eosel.appendChild(opt);
-  });
+    // Fill engineer object select
+    const eosel = document.getElementById('engObject');
+    if (eosel) state.objects.forEach(o => {
+      const opt = document.createElement('option'); opt.value=o.id; opt.textContent=o.name; eosel.appendChild(opt);
+    });
 
-  loadDashboard();
+    loadDashboard();
+  } catch(e) {
+    console.error('Init error:', e);
+    document.getElementById('dashReports').innerHTML = '<div class="empty">Ошибка загрузки: '+e.message+'</div>';
+  }
 }
 
 // ── DASHBOARD ──
 async function loadDashboard() {
-  document.getElementById('statProjects').textContent = state.projects.length;
+  document.getElementById('statProjects').textContent = state.objects.length;
   document.getElementById('statObjects').textContent = state.objects.length;
   document.getElementById('statEngineers').textContent = state.users.filter(u=>u.role!=='admin').length;
 
@@ -408,11 +401,10 @@ async function loadDashboard() {
   const recent = all.slice(0,10);
   document.getElementById('dashReports').innerHTML = recent.length ? `
     <table class="table">
-      <tr><th>Дата</th><th>Инженер</th><th>Проект</th><th>Объект</th><th>Статус</th></tr>
-      ${recent.map(r=>`<tr onclick="openReport(${r.id},'${r.report_date}','${r.engineer_name||''}')">
+      <tr><th>Дата</th><th>Инженер</th><th>Объект</th><th>Статус</th></tr>
+      ${recent.map(r=>`<tr onclick="openReport(${r.id})" style="cursor:pointer">
         <td style="font-family:var(--mono)">${r.report_date}</td>
         <td>${r.engineer_name||'—'}</td>
-        <td>${r.project_name||'—'}</td>
         <td>${r.object_name||'—'}</td>
         <td><span class="badge ${r.status==='submitted'?'badge-active':'badge-type'}">${r.status==='submitted'?'Сдана':'Черновик'}</span></td>
       </tr>`).join('')}
@@ -636,7 +628,7 @@ async function loadAllReports() {
   document.getElementById('reportsList').innerHTML = reports.length ? `
     <table class="table">
       <tr><th>Дата</th><th>Инженер</th><th>Проект</th><th>Объект</th><th>Статус</th></tr>
-      ${reports.map(r=>`<tr onclick="openReport(${r.id},'${r.report_date}','${(r.engineer_name||'').replace(/'/g,'')}')" style="cursor:pointer">
+      ${reports.map(r=>`<tr onclick="openReport(${r.id})" style="cursor:pointer">
         <td style="font-family:var(--mono)">${r.report_date}</td>
         <td>${r.engineer_name||'—'}</td>
         <td>${r.project_name||'—'}</td>
