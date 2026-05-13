@@ -8,6 +8,28 @@ from db.schema import get_db, init_db
 
 app = Flask(__name__, static_folder='static', static_url_path='')
 init_db()  # Ensure DB exists on startup
+
+# Auto-migrate: добавить новые колонки если их нет
+def auto_migrate():
+    db = get_db()
+    migrations = [
+        ("ALTER TABLE operational_control ADD COLUMN status TEXT DEFAULT ''", "operational_control.status"),
+        ("ALTER TABLE operational_control ADD COLUMN deviation_note TEXT DEFAULT ''", "operational_control.deviation_note"),
+        ("ALTER TABLE acceptance_control ADD COLUMN status TEXT DEFAULT ''", "acceptance_control.status"),
+        ("ALTER TABLE acceptance_control ADD COLUMN deviation_note TEXT DEFAULT ''", "acceptance_control.deviation_note"),
+        ("ALTER TABLE input_control ADD COLUMN section_id INTEGER", "input_control.section_id"),
+        ("ALTER TABLE meetings ADD COLUMN protocol_path TEXT", "meetings.protocol_path"),
+        ("ALTER TABLE meetings ADD COLUMN protocol_name TEXT", "meetings.protocol_name"),
+    ]
+    for sql, label in migrations:
+        try:
+            db.execute(sql)
+            db.commit()
+        except Exception:
+            pass  # колонка уже существует
+    db.close()
+
+auto_migrate()
 CORS(app)
 
 @app.get('/')
@@ -265,7 +287,7 @@ def get_report(report_id):
         ORDER BY c.name
     """, (report_id,)).fetchall())
     r['input_control'] = rows_to_list(db.execute(
-        "SELECT * FROM input_control WHERE report_id=?", (report_id,)).fetchall())
+        "SELECT ic.*, s.name as section_name FROM input_control ic LEFT JOIN sections s ON s.id=ic.section_id WHERE ic.report_id=?", (report_id,)).fetchall())
     r['operational_control'] = rows_to_list(db.execute(
         "SELECT oc.*, s.name as section_name FROM operational_control oc LEFT JOIN sections s ON s.id=oc.section_id WHERE oc.report_id=?", (report_id,)).fetchall())
     r['verbal_remarks'] = rows_to_list(db.execute(
@@ -330,8 +352,8 @@ def add_input_control(report_id):
     d = request.json or {}
     db = get_db()
     cur = db.execute(
-        "INSERT INTO input_control (report_id, material_name, quantity, document_name, deviation_note, engineer_id) VALUES (?,?,?,?,?,?)",
-        (report_id, d.get('material_name'), d.get('quantity'), d.get('document_name'), d.get('deviation_note'), d.get('engineer_id'))
+        "INSERT INTO input_control (report_id, material_name, quantity, document_name, section_id, deviation_note, engineer_id) VALUES (?,?,?,?,?,?,?)",
+        (report_id, d.get('material_name'), d.get('quantity'), d.get('document_name'), d.get('section_id'), d.get('deviation_note'), d.get('engineer_id'))
     )
     db.commit()
     row = db.execute("SELECT * FROM input_control WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -411,8 +433,8 @@ def add_operational_control(report_id):
     d = request.json or {}
     db = get_db()
     cur = db.execute(
-        "INSERT INTO operational_control (report_id, section_id, work_stage, controlled_operations, control_method, engineer_id) VALUES (?,?,?,?,?,?)",
-        (report_id, d.get('section_id'), d.get('work_stage'), d.get('controlled_operations'), d.get('control_method'), d.get('engineer_id'))
+        "INSERT INTO operational_control (report_id, section_id, work_stage, controlled_operations, control_method, status, deviation_note, engineer_id) VALUES (?,?,?,?,?,?,?,?)",
+        (report_id, d.get('section_id'), d.get('work_stage'), d.get('controlled_operations'), d.get('control_method'), d.get('status',''), d.get('deviation_note',''), d.get('engineer_id'))
     )
     db.commit()
     row = db.execute("SELECT * FROM operational_control WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -470,6 +492,42 @@ def delete_meeting(meeting_id):
     db = get_db()
     db.execute("DELETE FROM meetings WHERE id=?", (meeting_id,))
     db.commit()
+    db.close()
+    return ok()
+
+
+# ─────────────────────────────────────────────────────────
+# ПРОТОКОЛ СОВЕЩАНИЯ
+# ─────────────────────────────────────────────────────────
+
+@app.post('/api/meetings/<int:meeting_id>/protocol')
+def upload_meeting_protocol(meeting_id):
+    if 'file' not in request.files:
+        return err('Файл не найден')
+    f = request.files['file']
+    ext = os.path.splitext(f.filename)[1].lower()
+    if ext not in ['.pdf', '.doc', '.docx']:
+        return err('Допустимые форматы: pdf, doc, docx')
+    filename = f"protocol_{meeting_id}_{uuid.uuid4().hex}{ext}"
+    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    f.save(filepath)
+    db = get_db()
+    db.execute("UPDATE meetings SET protocol_path=?, protocol_name=? WHERE id=?",
+               (filename, f.filename, meeting_id))
+    db.commit()
+    db.close()
+    return ok({'file_path': filename, 'original_name': f.filename}), 201
+
+@app.delete('/api/meetings/<int:meeting_id>/protocol')
+def delete_meeting_protocol(meeting_id):
+    db = get_db()
+    row = db.execute("SELECT protocol_path FROM meetings WHERE id=?", (meeting_id,)).fetchone()
+    if row and row['protocol_path']:
+        fpath = os.path.join(UPLOAD_FOLDER, row['protocol_path'])
+        if os.path.exists(fpath):
+            os.remove(fpath)
+        db.execute("UPDATE meetings SET protocol_path=NULL, protocol_name=NULL WHERE id=?", (meeting_id,))
+        db.commit()
     db.close()
     return ok()
 
@@ -557,8 +615,8 @@ def add_acceptance_control(report_id):
     d = request.json or {}
     db = get_db()
     cur = db.execute(
-        "INSERT INTO acceptance_control (report_id, section_id, work_stage, controlled_operations, control_method, engineer_id) VALUES (?,?,?,?,?,?)",
-        (report_id, d.get('section_id'), d.get('work_stage'), d.get('controlled_operations'), d.get('control_method'), d.get('engineer_id'))
+        "INSERT INTO acceptance_control (report_id, section_id, work_stage, controlled_operations, control_method, status, deviation_note, engineer_id) VALUES (?,?,?,?,?,?,?,?)",
+        (report_id, d.get('section_id'), d.get('work_stage'), d.get('controlled_operations'), d.get('control_method'), d.get('status',''), d.get('deviation_note',''), d.get('engineer_id'))
     )
     db.commit()
     row = db.execute("SELECT * FROM acceptance_control WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -612,6 +670,8 @@ def run_migration():
             work_stage TEXT,
             controlled_operations TEXT,
             control_method TEXT,
+            status TEXT DEFAULT \'\',
+            deviation_note TEXT DEFAULT \'\',
             engineer_id INTEGER
         );
         CREATE TABLE IF NOT EXISTS ks2_check (
