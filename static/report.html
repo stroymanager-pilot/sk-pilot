@@ -458,6 +458,11 @@ function renderInfo() {
 
 // ── SECTIONS MANAGER ──
 function renderSectionsModal() {
+  // Если нет участков — показать подсказку
+  if (!S.allSections.length) {
+    document.getElementById('sectionsChips').innerHTML=`<div style="font-size:13px;color:var(--text3);padding:8px 0">Участков нет — добавьте первый</div>`;
+    return;
+  }
   const chips = S.allSections.map(s=>`
     <span class="sec-chip">${esc(s.name)}
       ${!S.isReadonly&&s.user_id?`<button onclick="deleteMySection(${s.id})">✕</button>`:''}
@@ -729,37 +734,42 @@ async function deleteAC(id) {
 
 // ── REMARKS ──
 function renderRemarks() {
-  const open=S.remarks.filter(r=>r.status==='open').length;
+  // Собираем все замечания из входного, операционного и приёмочного контроля
+  const icRemarks = (S.inputControl||[]).filter(r=>r.deviation_note).map(r=>({
+    source:'Входной контроль', item:r.material_name||'—', section:r.section_name||'—',
+    note:r.deviation_note, status:'open'
+  }));
+  const ocRemarks = ((S.report&&S.report.operational_control)||[]).filter(r=>r.deviation_note).map(r=>({
+    source:'Операционный контроль', item:r.work_stage||'—', section:r.section_name||'—',
+    note:r.deviation_note, status:'open'
+  }));
+  const acRemarks = (S.acceptanceControl||[]).filter(r=>r.deviation_note).map(r=>({
+    source:'Приёмочный контроль', item:r.work_stage||'—', section:r.section_name||'—',
+    note:r.deviation_note, status:'open'
+  }));
+  const allRemarks = [...icRemarks, ...ocRemarks, ...acRemarks];
+  if (!allRemarks.length) return `
+    <div class="card">
+      <div class="card-h"><div class="ico">⚠️</div>Реестр замечаний</div>
+      <div class="empty" style="padding:24px">Замечаний нет — все показатели в норме ✓</div>
+    </div>`;
   return `
-    <div style="font-size:19px;font-weight:800;color:var(--navy);margin-bottom:4px">Замечания</div>
-    <div style="font-size:13px;color:var(--text3);margin-bottom:14px">Устные замечания${open>0?` · <span style="color:var(--red);font-weight:700">${open} открытых</span>`:''}</div>
-    ${S.isReadonly?'<div class="readonly-banner">✅ Сводка сдана — редактирование недоступно</div>':''}
-    ${!S.isReadonly?`<div class="card">
-      <div class="card-h"><div class="ico">⚠️</div>Новое замечание</div>
-      <div class="new-form">
-        <label class="fl no-mt">Описание</label>
-        <textarea id="rmDesc" style="min-height:68px" placeholder="Опишите нарушение..."></textarea>
-        <div class="row2">
-          <div><label class="fl">Участок</label><select id="rmSec">${sectionOpts(S.allSections[0]?.id)}</select></div>
-          <div><label class="fl">Срок устранения</label><input type="date" id="rmDeadline"></div>
-        </div>
-        <button class="btn-p" style="margin-top:10px" onclick="saveRemark()">+ Добавить</button>
-      </div>
-    </div>`:''}
-    ${S.remarks.length?`<div class="card">
-      <div class="card-h"><div class="ico">📋</div>Замечания <span class="count">${S.remarks.length}</span></div>
-      ${S.remarks.map(r=>`<div class="rm-item ${r.status}">
-        <div style="display:flex;align-items:start;justify-content:space-between">
-          <div style="flex:1">
-            <div style="font-size:14px"><span class="rm-dot ${r.status}"></span>${esc(r.description)}</div>
-            <div style="font-size:11px;color:var(--text2);margin-top:4px">${esc(r.section_name)||''}${r.deadline?' · срок: '+fmtDate(r.deadline):''}</div>
-            ${r.status==='open'&&!S.isReadonly?`<div class="close-btn" onclick="closeRemark(${r.id})">✓ Закрыть</div>`:
-              r.closed_at?`<div style="font-size:11px;color:var(--green);margin-top:4px;font-weight:600">Закрыто ${fmtDate(r.closed_at)}${esc(r.closed_note)?' · '+r.closed_note:''}</div>`:''}
+    <div class="card">
+      <div class="card-h"><div class="ico">⚠️</div>Реестр замечаний <span class="badge" style="margin-left:8px;background:var(--red);color:#fff;padding:2px 8px;border-radius:99px;font-size:12px">${allRemarks.length}</span></div>
+      <p style="font-size:12px;color:var(--text3);margin-bottom:12px">Замечания из разделов контроля текущей сводки</p>
+      ${allRemarks.map((r,i)=>`
+        <div style="padding:10px 0;border-bottom:1px solid var(--border)">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+            <div>
+              <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:3px">${esc(r.source)}</div>
+              <div style="font-size:13px;font-weight:600;color:var(--text)">${esc(r.item)}</div>
+              ${r.section&&r.section!=='—'?`<div style="font-size:12px;color:var(--text3)">${esc(r.section)}</div>`:''}
+              <div style="font-size:13px;color:var(--red);margin-top:4px">⚠ ${esc(r.note)}</div>
+            </div>
+            <span style="font-size:11px;background:var(--red-pale,#fff0f0);color:var(--red);padding:3px 8px;border-radius:99px;white-space:nowrap;flex-shrink:0">Открыто</span>
           </div>
-          ${!S.isReadonly?`<button class="p-rm" onclick="deleteRemark(${r.id})">✕</button>`:''}
-        </div>
-      </div>`).join('')}
-    </div>`:''}`;
+        </div>`).join('')}
+    </div>`;
 }
 
 async function saveRemark() {
@@ -959,14 +969,14 @@ function renderMeeting() {
           <a href="${API}/uploads/${S.meetingProtocol}" target="_blank">${S.meetingProtocolName||'Протокол.pdf'}</a>
           <button onclick="removeProtocol()">✕</button>
         </div>`:`
-        <label class="protocol-upload">
+        <div class="protocol-upload" onclick="document.getElementById('protocolFileInput').click()">
           <span style="font-size:22px">📎</span>
           <div>
             <div style="font-size:14px;font-weight:600;color:var(--text)">Загрузить протокол</div>
             <div style="font-size:12px;color:var(--text3)">PDF, DOC, DOCX — до 20 МБ</div>
           </div>
-          <input type="file" accept=".pdf,.doc,.docx" style="display:none" onchange="uploadProtocol(event)">
-        </label>`}
+        </div>
+        <input type="file" id="protocolFileInput" accept=".pdf,.doc,.docx" style="display:none" onchange="uploadProtocol(event)">`}
     </div>`;
 }
 
@@ -1096,7 +1106,7 @@ function renderStep(id) {
 async function openHistory() {
   openModal('history');
   document.getElementById('historyBody').innerHTML='<div class="empty">Загрузка...</div>';
-  const r=await fetch(`${API}/api/my_reports?user_id=${userId}`).then(r=>r.json());
+  const r=await fetchWithRetry(`${API}/api/my_reports?user_id=${userId}`).then(r=>r.json()).catch(()=>({data:[]}));
   const reports=r.data||[];
   document.getElementById('historyBody').innerHTML = reports.length?`
     <p style="font-size:12px;color:var(--text3);margin-bottom:12px">Нажмите на сводку чтобы посмотреть</p>
