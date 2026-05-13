@@ -232,6 +232,8 @@ let currentStep = 0;
 let S = {objectId:null,reportId:null,report:null,object:null,contractors:[],sections:[],
   mySections:[],remarks:[],prescriptions:[],inputControl:[],photos:[],meetingId:null,
   acceptanceControl:[],ks2Check:[],personnel:[],isReadonly:false};
+function esc(v){if(v==null)return '';return String(v).replace(/`/g,'\\`').replace(/\$\{/g,'\\${');}
+
 window._prows = [];
 let _meetingData = {day:'',loc:'',time:'',part:'',agenda:''};
 
@@ -298,8 +300,8 @@ function showObjectPicker(objs) {
   document.getElementById('main').innerHTML=`<div class="card">
     <div class="card-h"><div class="ico">🏗</div>Выберите объект</div>
     ${objs.map(o=>`<div onclick="selectObject(${o.id})" style="padding:12px;border:1.5px solid var(--border);border-radius:var(--r-sm);margin-bottom:8px;cursor:pointer" onmouseover="this.style.borderColor='var(--navy3)'" onmouseout="this.style.borderColor='var(--border)'">
-      <div style="font-size:15px;font-weight:700">${o.name}</div>
-      <div style="font-size:12px;color:var(--text3)">${o.address||''}</div>
+      <div style="font-size:15px;font-weight:700">${esc(o.name)}</div>
+      <div style="font-size:12px;color:var(--text3)">${esc(o.address)||''}</div>
     </div>`).join('')}
   </div>`;
   document.getElementById('btnBack').style.display='none';
@@ -421,14 +423,14 @@ function renderInfo() {
     </div>
     <div class="card">
       <div class="card-h"><div class="ico">📍</div>Участки</div>
-      ${S.allSections.length?S.allSections.map(s=>`<div class="info-row"><span>${s.name}</span><span class="chip chip-ok">активен</span></div>`).join('')
+      ${S.allSections.length?S.allSections.map(s=>`<div class="info-row"><span>${esc(s.name)}</span><span class="chip chip-ok">активен</span></div>`).join('')
         :'<div class="empty">Нет участков — добавьте через кнопку ⚙ Участки</div>'}
     </div>
     <div class="card">
       <div class="card-h"><div class="ico">👷</div>Подрядчики <span class="count">${S.contractors.length}</span></div>
       ${S.contractors.map(c=>`<div style="padding:8px 0;border-bottom:1px solid var(--surface2)">
-        <div style="font-size:14px;font-weight:600">${c.name}</div>
-        <div style="font-size:12px;color:var(--text3)">${c.work_type||'—'}</div>
+        <div style="font-size:14px;font-weight:600">${esc(c.name)}</div>
+        <div style="font-size:12px;color:var(--text3)">${esc(c.work_type)||'—'}</div>
       </div>`).join('')}
     </div>`;
 }
@@ -436,7 +438,7 @@ function renderInfo() {
 // ── SECTIONS MANAGER ──
 function renderSectionsModal() {
   const chips = S.allSections.map(s=>`
-    <span class="sec-chip">${s.name}
+    <span class="sec-chip">${esc(s.name)}
       ${!S.isReadonly&&s.user_id?`<button onclick="deleteMySection(${s.id})">✕</button>`:''}
     </span>`).join('');
   document.getElementById('sectionsChips').innerHTML = chips || '<div style="color:var(--text3);font-size:13px">Нет участков</div>';
@@ -473,7 +475,7 @@ window.openModal = function(name) {
 };
 
 function sectionOpts(selected) {
-  return S.allSections.map(s=>`<option value="${s.id}"${s.id==selected?' selected':''}>${s.name}</option>`).join('');
+  return S.allSections.map(s=>`<option value="${s.id}"${s.id==selected?' selected':''}>${esc(s.name)}</option>`).join('');
 }
 
 // ── PERSONNEL ──
@@ -497,9 +499,9 @@ function renderPersonnel() {
     <div class="card">
       <div class="card-h"><div class="ico">👷</div>Персонал</div>
       ${S.personnel.filter(p=>p.headcount>0).map(p=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--surface2)">
-        <div><div style="font-weight:600">${p.contractor_name}</div><div style="font-size:12px;color:var(--text3)">${p.section_name||''}</div>
-        <div style="font-size:12px;color:var(--text3)">${p.work_description||''}</div></div>
-        <div style="font-family:var(--mono);font-size:20px;font-weight:700">${p.headcount}</div>
+        <div><div style="font-weight:600">${esc(p.contractor_name)}</div><div style="font-size:12px;color:var(--text3)">${esc(p.section_name)||''}</div>
+        <div style="font-size:12px;color:var(--text3)">${esc(p.work_description)||''}</div></div>
+        <div style="font-family:var(--mono);font-size:20px;font-weight:700">${esc(p.headcount)}</div>
       </div>`).join('')||'<div class="empty">Нет данных</div>'}
     </div>`;
   return `
@@ -574,9 +576,9 @@ function renderInput() {
         <div style="padding:10px 0;border-bottom:1px solid var(--surface2)">
           <div style="display:flex;justify-content:space-between">
             <div>
-              <div style="font-size:14px;font-weight:600">${ic.material_name}</div>
-              <div style="font-size:12px;color:var(--text3)">${ic.quantity||'—'} · ${ic.document_name||'—'}</div>
-              ${ic.deviation_note?`<div style="font-size:12px;color:var(--red);margin-top:2px">⚠ ${ic.deviation_note}</div>`:`<div style="font-size:12px;color:var(--green);margin-top:2px">✓ Норма</div>`}
+              <div style="font-size:14px;font-weight:600">${esc(ic.material_name)}</div>
+              <div style="font-size:12px;color:var(--text3)">${esc(ic.quantity)||'—'} · ${esc(ic.document_name)||'—'}</div>
+              ${ic.deviation_note?`<div style="font-size:12px;color:var(--red);margin-top:2px">⚠ ${esc(ic.deviation_note)}</div>`:`<div style="font-size:12px;color:var(--green);margin-top:2px">✓ Норма</div>`}
             </div>
             ${!S.isReadonly?`<button class="p-rm" onclick="deleteIC(${ic.id})">✕</button>`:''}
           </div>
@@ -626,10 +628,10 @@ function renderOCsection(title, ico, items, addFn, delFn, stageId, opsId, method
       ${items.length?items.map(o=>`
         <div style="padding:10px 0;border-bottom:1px solid var(--surface2)">
           <div style="display:flex;justify-content:space-between">
-            <div style="font-size:14px;font-weight:600">${o.work_stage} <span style="font-size:12px;color:var(--text3);font-weight:400">${o.section_name||''}</span></div>
+            <div style="font-size:14px;font-weight:600">${esc(o.work_stage)} <span style="font-size:12px;color:var(--text3);font-weight:400">${esc(o.section_name)||''}</span></div>
             ${!S.isReadonly?`<button class="p-rm" onclick="${delFn}(${o.id})">✕</button>`:''}
           </div>
-          <div style="font-size:12px;color:var(--text3);margin-top:3px">Операции: ${o.controlled_operations||'—'}<br>Метод: ${o.control_method||'—'}</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:3px">Операции: ${esc(o.controlled_operations)||'—'}<br>Метод: ${esc(o.control_method)||'—'}</div>
         </div>`).join(''):'<div class="empty">Нет записей</div>'}
     </div>`;
 }
@@ -699,10 +701,10 @@ function renderRemarks() {
       ${S.remarks.map(r=>`<div class="rm-item ${r.status}">
         <div style="display:flex;align-items:start;justify-content:space-between">
           <div style="flex:1">
-            <div style="font-size:14px"><span class="rm-dot ${r.status}"></span>${r.description}</div>
-            <div style="font-size:11px;color:var(--text2);margin-top:4px">${r.section_name||''}${r.deadline?' · срок: '+fmtDate(r.deadline):''}</div>
+            <div style="font-size:14px"><span class="rm-dot ${r.status}"></span>${esc(r.description)}</div>
+            <div style="font-size:11px;color:var(--text2);margin-top:4px">${esc(r.section_name)||''}${r.deadline?' · срок: '+fmtDate(r.deadline):''}</div>
             ${r.status==='open'&&!S.isReadonly?`<div class="close-btn" onclick="closeRemark(${r.id})">✓ Закрыть</div>`:
-              r.closed_at?`<div style="font-size:11px;color:var(--green);margin-top:4px;font-weight:600">Закрыто ${fmtDate(r.closed_at)}${r.closed_note?' · '+r.closed_note:''}</div>`:''}
+              r.closed_at?`<div style="font-size:11px;color:var(--green);margin-top:4px;font-weight:600">Закрыто ${fmtDate(r.closed_at)}${esc(r.closed_note)?' · '+r.closed_note:''}</div>`:''}
           </div>
           ${!S.isReadonly?`<button class="p-rm" onclick="deleteRemark(${r.id})">✕</button>`:''}
         </div>
@@ -762,7 +764,7 @@ function renderPrescriptions() {
           <span style="font-size:11px;font-weight:700;background:var(--amber-pale);color:var(--amber);padding:2px 8px;border-radius:10px;margin-left:6px">${p.status||'—'}</span></div>
           ${!S.isReadonly?`<button class="p-rm" onclick="deletePre(${p.id})">✕</button>`:''}
         </div>
-        <div style="font-size:12px;color:var(--text3);margin-top:3px">Выдано: ${fmtDate(p.issue_date)} · Срок: ${fmtDate(p.deadline)} · ${p.section_name||'—'}</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:3px">Выдано: ${fmtDate(p.issue_date)} · Срок: ${fmtDate(p.deadline)} · ${esc(p.section_name)||'—'}</div>
       </div>`).join('')}
     </div>`:''}`;
 }
@@ -820,9 +822,9 @@ function renderKS2() {
         <th style="padding:6px 4px;border-bottom:2px solid var(--border);font-size:11px;color:var(--text3)">ИД</th>
         ${!S.isReadonly?'<th></th>':''}</tr>
         ${S.ks2Check.map(k=>`<tr>
-          <td style="padding:8px 4px;border-bottom:1px solid var(--surface2)">${k.contractor_name||'—'}</td>
-          <td style="padding:8px 4px;border-bottom:1px solid var(--surface2)">${k.object_work||'—'}</td>
-          <td style="padding:8px 4px;border-bottom:1px solid var(--surface2);font-family:var(--mono);text-align:center">${k.ks2_number||'—'}</td>
+          <td style="padding:8px 4px;border-bottom:1px solid var(--surface2)">${esc(k.contractor_name)||'—'}</td>
+          <td style="padding:8px 4px;border-bottom:1px solid var(--surface2)">${esc(k.object_work)||'—'}</td>
+          <td style="padding:8px 4px;border-bottom:1px solid var(--surface2);font-family:var(--mono);text-align:center">${esc(k.ks2_number)||'—'}</td>
           <td style="padding:8px 4px;border-bottom:1px solid var(--surface2);text-align:center;color:${k.has_ks6a?'var(--green)':'var(--text3)'};font-weight:700">${k.has_ks6a?'✓':'—'}</td>
           <td style="padding:8px 4px;border-bottom:1px solid var(--surface2);text-align:center;color:${k.has_id?'var(--green)':'var(--text3)'};font-weight:700">${k.has_id?'✓':'—'}</td>
           ${!S.isReadonly?`<td style="padding:8px 4px;border-bottom:1px solid var(--surface2)"><button class="p-rm" onclick="deleteKS2(${k.id})">✕</button></td>`:''}</tr>`).join('')}
@@ -939,7 +941,7 @@ function renderPhotos() {
       <div class="photo-grid" id="photoGrid">
         ${S.photos.map(p=>`
           <div class="photo-thumb">
-            <img src="${API}/uploads/${p.file_path}" alt="">
+            <img src="${API}/uploads/${esc(p.file_path)}" alt="">
             <div class="photo-cap-wrap">
               <input class="photo-cap-input" placeholder="Подпись к фото..." value="${(p.caption||'').replace(/"/g,'&quot;')}"
                 ${S.isReadonly?'disabled':''} onblur="updateCaption(${p.id},this.value)">
@@ -1004,10 +1006,10 @@ async function openHistory() {
   document.getElementById('historyBody').innerHTML = reports.length?`
     <p style="font-size:12px;color:var(--text3);margin-bottom:12px">Нажмите на сводку чтобы посмотреть</p>
     ${reports.map(r=>`
-      <div class="hist-item" onclick="openPastReport(${r.id},'${r.report_date}')">
-        <div class="hist-date">${r.report_date}</div>
+      <div class="hist-item" onclick="openPastReport(${r.id},'${esc(r.report_date)}')">
+        <div class="hist-date">${esc(r.report_date)}</div>
         <div class="hist-info">
-          <div class="hist-obj">${r.object_name||'—'} · ${r.project_name||'—'}</div>
+          <div class="hist-obj">${esc(r.object_name)||'—'} · ${esc(r.project_name)||'—'}</div>
         </div>
         <span class="hist-stat ${r.status}">${r.status==='submitted'?'Сдана':'Черновик'}</span>
       </div>`).join('')}`
@@ -1035,25 +1037,25 @@ async function openPastReport(id, date) {
     </div>
     ${personnel.length?`<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:8px">👷 Персонал</div>
       ${personnel.map(p=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--surface2)">
-        <div><div style="font-weight:600">${p.contractor_name}</div><div style="font-size:12px;color:var(--text3)">${p.section_name||''} · ${p.work_description||''}</div></div>
-        <div style="font-family:var(--mono);font-size:18px;font-weight:700">${p.headcount}</div>
+        <div><div style="font-weight:600">${esc(p.contractor_name)}</div><div style="font-size:12px;color:var(--text3)">${esc(p.section_name)||''} · ${esc(p.work_description)||''}</div></div>
+        <div style="font-family:var(--mono);font-size:18px;font-weight:700">${esc(p.headcount)}</div>
       </div>`).join('')}
     </div>`:''}
     ${remarks.length?`<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:8px">⚠️ Замечания</div>
       ${remarks.map(r=>`<div style="padding:7px 0;border-bottom:1px solid var(--surface2);display:flex;gap:8px">
         <div style="width:8px;height:8px;border-radius:50%;margin-top:4px;flex-shrink:0;background:${r.status==='open'?'var(--red)':'var(--green)'}"></div>
-        <div style="font-size:13px">${r.description}</div>
+        <div style="font-size:13px">${esc(r.description)}</div>
       </div>`).join('')}
     </div>`:''}
     ${meetings.length?`<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:8px">🤝 Совещание</div>
-      ${meetings.map(m=>`<div style="font-size:13px">${m.location||'—'} · ${m.time||''}<br>
-        <div style="white-space:pre-line;font-size:12px;color:var(--text3);margin-top:4px">${m.participants||''}</div></div>`).join('')}
+      ${meetings.map(m=>`<div style="font-size:13px">${esc(m.location)||'—'} · ${esc(m.time)||''}<br>
+        <div style="white-space:pre-line;font-size:12px;color:var(--text3);margin-top:4px">${esc(m.participants)||''}</div></div>`).join('')}
     </div>`:''}
     ${photos.length?`<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:8px">📷 Фото (${photos.length})</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
         ${photos.map(p=>`<div style="border-radius:6px;overflow:hidden;border:1px solid var(--border)">
-          <img src="${API}/uploads/${p.file_path}" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block">
-          ${p.caption?`<div style="padding:4px 6px;font-size:11px;color:var(--text3)">${p.caption}</div>`:''}
+          <img src="${API}/uploads/${esc(p.file_path)}" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block">
+          ${p.caption?`<div style="padding:4px 6px;font-size:11px;color:var(--text3)">${esc(p.caption)}</div>`:''}
         </div>`).join('')}
       </div></div>`:''}`;
 }
