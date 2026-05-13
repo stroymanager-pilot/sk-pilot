@@ -969,11 +969,15 @@ function renderMeeting() {
           <a href="${API}/uploads/${S.meetingProtocol}" target="_blank">${S.meetingProtocolName||'Протокол.pdf'}</a>
           <button onclick="removeProtocol()">✕</button>
         </div>`:`
-        <div class="protocol-upload" onclick="document.getElementById('protocolFileInput').click()">
+        <div class="protocol-upload"
+          onclick="document.getElementById('protocolFileInput').click()"
+          ondragover="event.preventDefault();event.stopPropagation();this.style.borderColor='var(--navy3)'"
+          ondragleave="this.style.borderColor=''"
+          ondrop="event.preventDefault();event.stopPropagation();this.style.borderColor='';uploadProtocolDrop(event)">
           <span style="font-size:22px">📎</span>
           <div>
             <div style="font-size:14px;font-weight:600;color:var(--text)">Загрузить протокол</div>
-            <div style="font-size:12px;color:var(--text3)">PDF, DOC, DOCX — до 20 МБ</div>
+            <div style="font-size:12px;color:var(--text3)">PDF, DOC, DOCX — нажмите или перетащите</div>
           </div>
         </div>
         <input type="file" id="protocolFileInput" accept=".pdf,.doc,.docx" style="display:none" onchange="uploadProtocol(event)">`}
@@ -1043,9 +1047,19 @@ function renderPhotos() {
     </div>`;
 }
 
+async function uploadProtocolDrop(e) {
+  if (S.isReadonly) return;
+  const file = e.dataTransfer?.files[0]; if (!file) return;
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (!['pdf','doc','docx'].includes(ext)) { toast('Допустимые форматы: PDF, DOC, DOCX','err'); return; }
+  await doUploadProtocol(file);
+}
 async function uploadProtocol(e) {
   if (S.isReadonly) return;
   const file = e.target.files[0]; if (!file) return;
+  await doUploadProtocol(file);
+}
+async function doUploadProtocol(file) {
   await saveMeeting(true);
   const fd = new FormData(); fd.append('file', file);
   setSaving(true);
@@ -1126,43 +1140,97 @@ async function openPastReport(id, date) {
   openModal('past-report');
   document.getElementById('pastReportTitle').textContent = 'Сводка · ' + date;
   document.getElementById('pastReportBody').innerHTML='<div class="empty">Загрузка...</div>';
-  const r=await fetch(`${API}/api/reports/${id}`).then(r=>r.json());
-  const d=r.data;
+  const r=await fetchWithRetry(`${API}/api/reports/${id}`).then(r=>r.json()).catch(()=>({data:{}}));
+  const d=r.data||{};
   const personnel=(d.personnel||[]).filter(p=>p.headcount>0);
   const remarks=d.verbal_remarks||[];
+  const ic=d.input_control||[];
+  const oc=d.operational_control||[];
+  const ac=d.acceptance_control||[];
+  const ks2=d.ks2_check||[];
   const photos=d.photos||[];
   const meetings=d.meetings||[];
+  // Замечания из контроля
+  const icRem=ic.filter(x=>x.deviation_note).map(x=>({src:'Вх.контроль',item:x.material_name,note:x.deviation_note}));
+  const ocRem=oc.filter(x=>x.deviation_note).map(x=>({src:'Операц.',item:x.work_stage,note:x.deviation_note}));
+  const acRem=ac.filter(x=>x.deviation_note).map(x=>({src:'Приёмочный',item:x.work_stage,note:x.deviation_note}));
+  const allRem=[...remarks.map(x=>({src:'Замечание',item:'',note:x.description,status:x.status})),...icRem,...ocRem,...acRem];
+
+  function sec(title,html){return html?`<div style="margin-bottom:16px">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);letter-spacing:.5px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--surface2)">${title}</div>
+    ${html}</div>`:''}
+
   document.getElementById('pastReportBody').innerHTML=`
     <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
-      ${[['Дата',d.report_date],['Объект',d.object_name],['Статус',d.status==='submitted'?'✅ Сдана':'📝 Черновик']].map(([l,v])=>`
-        <div style="background:var(--surface);padding:8px 12px;border-radius:6px;flex:1;min-width:100px">
+      ${[['Дата',d.report_date],['Объект',d.object_name||'—'],['Статус',d.status==='submitted'?'✅ Сдана':'📝 Черновик']].map(([l,v])=>`
+        <div style="background:var(--surface2,#f5f5f5);padding:8px 12px;border-radius:6px;flex:1;min-width:100px">
           <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase">${l}</div>
           <div style="font-size:13px;font-weight:600;margin-top:2px">${v||'—'}</div>
         </div>`).join('')}
     </div>
-    ${personnel.length?`<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:8px">👷 Персонал</div>
-      ${personnel.map(p=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--surface2)">
-        <div><div style="font-weight:600">${esc(p.contractor_name)}</div><div style="font-size:12px;color:var(--text3)">${esc(p.section_name)||''} · ${esc(p.work_description)||''}</div></div>
-        <div style="font-family:var(--mono);font-size:18px;font-weight:700">${esc(p.headcount)}</div>
-      </div>`).join('')}
-    </div>`:''}
-    ${remarks.length?`<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:8px">⚠️ Замечания</div>
-      ${remarks.map(r=>`<div style="padding:7px 0;border-bottom:1px solid var(--surface2);display:flex;gap:8px">
-        <div style="width:8px;height:8px;border-radius:50%;margin-top:4px;flex-shrink:0;background:${r.status==='open'?'var(--red)':'var(--green)'}"></div>
-        <div style="font-size:13px">${esc(r.description)}</div>
-      </div>`).join('')}
-    </div>`:''}
-    ${meetings.length?`<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:8px">🤝 Совещание</div>
-      ${meetings.map(m=>`<div style="font-size:13px">${esc(m.location)||'—'} · ${esc(m.time)||''}<br>
-        <div style="white-space:pre-line;font-size:12px;color:var(--text3);margin-top:4px">${esc(m.participants)||''}</div></div>`).join('')}
-    </div>`:''}
-    ${photos.length?`<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:8px">📷 Фото (${photos.length})</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
-        ${photos.map(p=>`<div style="border-radius:6px;overflow:hidden;border:1px solid var(--border)">
-          <img src="${API}/uploads/${esc(p.file_path)}" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block">
-          ${p.caption?`<div style="padding:4px 6px;font-size:11px;color:var(--text3)">${esc(p.caption)}</div>`:''}
-        </div>`).join('')}
-      </div></div>`:''}`;
+    ${sec('👷 Персонал', personnel.length?personnel.map(p=>`
+      <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--surface2)">
+        <div><div style="font-weight:600;font-size:13px">${esc(p.contractor_name)}</div>
+        <div style="font-size:11px;color:var(--text3)">${esc(p.section_name)||''} · ${esc(p.work_description)||''}</div></div>
+        <div style="font-family:var(--mono);font-size:18px;font-weight:700">${p.headcount}</div>
+      </div>`).join(''):'')}
+    ${sec('📦 Входной контроль', ic.length?ic.map(x=>`
+      <div style="padding:6px 0;border-bottom:1px solid var(--surface2)">
+        <div style="font-size:13px;font-weight:600">${esc(x.material_name)}</div>
+        <div style="font-size:11px;color:var(--text3)">${esc(x.quantity||'')} · ${esc(x.document_name||'')}</div>
+        ${x.deviation_note?`<div style="font-size:12px;color:var(--red);margin-top:2px">⚠ ${esc(x.deviation_note)}</div>`:
+          '<div style="font-size:12px;color:var(--green);margin-top:2px">✓ Норма</div>'}
+      </div>`).join(''):'')}
+    ${sec('🔍 Операционный контроль', oc.length?oc.map(x=>`
+      <div style="padding:6px 0;border-bottom:1px solid var(--surface2)">
+        <div style="font-size:13px;font-weight:600">${esc(x.work_stage||'—')}</div>
+        <div style="font-size:11px;color:var(--text3)">${esc(x.section_name||'')} · ${esc(x.controlled_operations||'')} · ${esc(x.control_method||'')}</div>
+        ${x.deviation_note?`<div style="font-size:12px;color:var(--red);margin-top:2px">⚠ ${esc(x.deviation_note)}</div>`:
+          '<div style="font-size:12px;color:var(--green);margin-top:2px">✓ Норма</div>'}
+      </div>`).join(''):'')}
+    ${sec('✅ Приёмочный контроль', ac.length?ac.map(x=>`
+      <div style="padding:6px 0;border-bottom:1px solid var(--surface2)">
+        <div style="font-size:13px;font-weight:600">${esc(x.work_stage||'—')}</div>
+        <div style="font-size:11px;color:var(--text3)">${esc(x.section_name||'')} · ${esc(x.controlled_operations||'')}</div>
+        ${x.deviation_note?`<div style="font-size:12px;color:var(--red);margin-top:2px">⚠ ${esc(x.deviation_note)}</div>`:
+          '<div style="font-size:12px;color:var(--green);margin-top:2px">✓ Норма</div>'}
+      </div>`).join(''):'')}
+    ${sec(`⚠️ Замечания (${allRem.length})`, allRem.length?allRem.map(x=>`
+      <div style="padding:6px 0;border-bottom:1px solid var(--surface2);display:flex;gap:8px">
+        <div style="width:8px;height:8px;border-radius:50%;margin-top:4px;flex-shrink:0;background:${x.status==='closed'?'var(--green)':'var(--red)'}"></div>
+        <div>
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase">${x.src}</div>
+          <div style="font-size:13px">${esc(x.item||'')} ${x.item&&x.note?'—':''} ${esc(x.note||'')}</div>
+        </div>
+      </div>`).join(''):'')}
+    ${sec('📑 ИД / КС-2', ks2.length?`<table style="width:100%;font-size:12px;border-collapse:collapse">
+      <tr><th style="text-align:left;padding:4px;border-bottom:1px solid var(--surface2)">Организация</th>
+      <th style="text-align:left;padding:4px;border-bottom:1px solid var(--surface2)">Вид работ</th>
+      <th style="padding:4px;border-bottom:1px solid var(--surface2)">КС-2</th>
+      <th style="padding:4px;border-bottom:1px solid var(--surface2)">КС-6а</th>
+      <th style="padding:4px;border-bottom:1px solid var(--surface2)">ИД</th></tr>
+      ${ks2.map(k=>`<tr>
+        <td style="padding:5px 4px;border-bottom:1px solid var(--surface2)">${esc(k.contractor_name)}</td>
+        <td style="padding:5px 4px;border-bottom:1px solid var(--surface2)">${esc(k.object_work||'—')}</td>
+        <td style="padding:5px 4px;text-align:center;font-family:var(--mono);border-bottom:1px solid var(--surface2)">${esc(k.ks2_number||'—')}</td>
+        <td style="padding:5px 4px;text-align:center;border-bottom:1px solid var(--surface2)">${k.has_ks6a?'✓':'—'}</td>
+        <td style="padding:5px 4px;text-align:center;border-bottom:1px solid var(--surface2)">${k.has_id?'✓':'—'}</td>
+      </tr>`).join('')}</table>`:'')}
+    ${sec('🤝 Совещание', meetings.length?meetings.map(m=>`
+      <div style="font-size:13px">
+        ${m.meeting_date||m.day?`<div style="font-weight:600;margin-bottom:4px">${m.meeting_date||m.day} ${m.time?'· '+m.time:''}</div>`:''}
+        <div>${esc(m.location||'—')}</div>
+        ${m.participants?`<div style="white-space:pre-line;font-size:12px;color:var(--text3);margin-top:4px">${esc(m.participants)}</div>`:''}
+        ${m.agenda?`<div style="font-size:12px;color:var(--text3);margin-top:4px;font-style:italic">${esc(m.agenda)}</div>`:''}
+        ${m.protocol_path?`<div style="margin-top:8px"><a href="${API}/uploads/${m.protocol_path}" target="_blank"
+          style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:#f0f7ff;border:1px solid #b0d0ff;border-radius:4px;text-decoration:none;font-size:12px;font-weight:600;color:#0066cc">
+          📄 ${esc(m.protocol_name||'Протокол.pdf')} — открыть</a></div>`:''}
+      </div>`).join(''):'')}
+    ${sec(`📷 Фото (${photos.length})`, photos.length?`<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
+      ${photos.map(p=>`<div style="border-radius:6px;overflow:hidden;border:1px solid var(--border)">
+        <img src="${API}/uploads/${esc(p.file_path)}" style="width:100%;aspect-ratio:16/10;object-fit:cover;display:block">
+        ${p.caption?`<div style="padding:4px 6px;font-size:11px;color:var(--text3)">${esc(p.caption)}</div>`:''}
+      </div>`).join('')}</div>`:'')}`;
 }
 
 // ── SUBMIT ──

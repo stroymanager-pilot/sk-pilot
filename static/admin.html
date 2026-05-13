@@ -646,7 +646,7 @@ async function loadAllReports() {
     </table>` : '<div class="empty">Сводок нет</div>';
 }
 
-async function openReport(id) {
+async function openReport(id, date, engineer) {
   openModal('report');
   document.getElementById('modalReportBody').innerHTML='<div class="empty">Загрузка...</div>';
   const r = await fetch(`${API}/api/reports/${id}`).then(r=>r.json());
@@ -682,6 +682,14 @@ async function openReport(id) {
         ${ic.deviation_note?`<div style="font-size:12px;color:var(--red)">⚠ ${ic.deviation_note}</div>`:
           '<div style="font-size:12px;color:var(--green)">✓ Норма</div>'}
       </div>`).join('')):''}
+    ${(d.operational_control||[]).length?section('🔍 Операционный контроль', (d.operational_control||[]).map(o=>`
+      <div style="padding:6px 0;border-bottom:1px solid var(--border)">
+        <div style="font-weight:600">${o.work_stage||'—'}</div>
+        <div style="font-size:12px;color:var(--text3)">${o.section_name||''} · ${o.controlled_operations||''}</div>
+        ${o.deviation_note?`<div style="font-size:12px;color:var(--red)">⚠ ${o.deviation_note}</div>`:
+          '<div style="font-size:12px;color:var(--green)">✓ Норма</div>'}
+      </div>`).join('')):''}
+
     ${remarks.length?section(`⚠️ Замечания (${remarks.filter(r=>r.status==='open').length} открытых)`, remarks.map(r=>`
       <div style="padding:6px 0;border-bottom:1px solid var(--border);display:flex;gap:8px">
         <div style="width:8px;height:8px;border-radius:50%;margin-top:4px;flex-shrink:0;background:${r.status==='open'?'var(--red)':'var(--green)'}"></div>
@@ -712,9 +720,14 @@ async function openReport(id) {
       </tr>`).join('')}
     </table>`):''}
     ${meetings.length?section('🤝 Совещание', meetings.map(m=>`
-      <div style="font-size:13px"><strong>${m.location||'—'}</strong> · ${m.time||'—'}<br>
-      <div style="white-space:pre-line;font-size:12px;color:var(--text3);margin-top:4px">${m.participants||''}</div>
-      ${m.agenda?`<div style="font-size:12px;color:var(--text3);margin-top:4px"><em>${m.agenda}</em></div>`:''}
+      <div style="font-size:13px">
+        ${m.meeting_date||m.day?`<div style="font-weight:600;margin-bottom:2px">${m.meeting_date||m.day} ${m.time?'· '+m.time:''}</div>`:''}
+        <strong>${m.location||'—'}</strong>${(!m.meeting_date&&!m.day)?' · '+m.time:''}
+        <div style="white-space:pre-line;font-size:12px;color:var(--text3);margin-top:4px">${m.participants||''}</div>
+        ${m.agenda?`<div style="font-size:12px;color:var(--text3);margin-top:4px;font-style:italic">${m.agenda}</div>`:''}
+        ${m.protocol_path?`<div style="margin-top:8px"><a href="${API}/uploads/${m.protocol_path}" target="_blank"
+          style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:#f0f7ff;border:1px solid #b0d0ff;border-radius:4px;text-decoration:none;font-size:12px;font-weight:600;color:#0066cc">
+          📄 ${m.protocol_name||'Протокол.pdf'} — открыть</a></div>`:''}
       </div>`).join('')):''}
     ${photos.length?section(`📷 Фото (${photos.length})`, `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
       ${photos.map(p=>`<div style="border-radius:6px;overflow:hidden;border:1px solid var(--border)">
