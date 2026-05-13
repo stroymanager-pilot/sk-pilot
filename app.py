@@ -920,10 +920,9 @@ def my_reports():
     if not user_id: return err('user_id обязателен')
     db = get_db()
     rows = db.execute("""
-        SELECT dr.*, o.name as object_name, p.name as project_name
+        SELECT dr.*, o.name as object_name
         FROM daily_reports dr
         JOIN objects o ON o.id=dr.object_id
-        LEFT JOIN projects p ON p.id=o.project_id
         WHERE dr.user_id=?
         ORDER BY dr.report_date DESC
     """, (user_id,)).fetchall()
@@ -942,15 +941,14 @@ def all_reports():
     user_id = request.args.get('user_id')
     query = """
         SELECT dr.*, u.full_name as engineer_name,
-               o.name as object_name, p.name as project_name
+               o.name as object_name
         FROM daily_reports dr
         JOIN users u ON u.id=dr.user_id
         JOIN objects o ON o.id=dr.object_id
-        LEFT JOIN projects p ON p.id=o.project_id
         WHERE 1=1
     """
     params = []
-    if project_id: query += " AND p.id=?"; params.append(project_id)
+    # project_id filter removed (projects table not yet implemented)
     if object_id: query += " AND o.id=?"; params.append(object_id)
     if user_id: query += " AND dr.user_id=?"; params.append(user_id)
     query += " ORDER BY dr.report_date DESC LIMIT 200"
@@ -970,13 +968,11 @@ def all_photos():
     object_id = request.args.get('object_id')
     query = """
         SELECT ph.*, u.full_name as engineer_name,
-               o.name as object_name, dr.report_date,
-               p.name as project_name
+               o.name as object_name, dr.report_date
         FROM photos ph
         JOIN daily_reports dr ON dr.id=ph.report_id
         JOIN users u ON u.id=dr.user_id
         JOIN objects o ON o.id=dr.object_id
-        LEFT JOIN projects p ON p.id=o.project_id
         WHERE 1=1
     """
     params = []
