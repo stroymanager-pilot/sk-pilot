@@ -998,7 +998,7 @@ function restoreMeetingFields() {
   },0);
 }
 
-async function saveMeeting(silent=false) {
+async function saveMeeting(silent=false, force=false) {
   if (S.isReadonly) return;
   const day=document.getElementById('mDay')?.value||'';
   const date=document.getElementById('mDate')?.value||'';
@@ -1008,11 +1008,12 @@ async function saveMeeting(silent=false) {
   const agenda=document.getElementById('mAgenda')?.value||'';
   _meetingData={day,date,loc,time,part,agenda};
   const location=date?(formatMeetingDate(date)+(loc?' | '+loc:'')):(day?(day+(loc?' | '+loc:'')):(loc||''));
-  if(!location&&!part)return;
+  // Разрешаем создание совещания даже без данных (для загрузки протокола)
+  if(!location&&!part&&!force&&!S.meetingId)return;
   setSaving(true);
-  const data={location,time,participants:part,agenda,engineer_id:userId};
+  const data={location:location||'Совещание',time,participants:part,agenda,engineer_id:userId};
   if(S.meetingId) await fetch(`${API}/api/meetings/${S.meetingId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
-  else { const r=await fetch(`${API}/api/reports/${S.reportId}/meetings`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(r=>r.json()); S.meetingId=r.data.id; }
+  else { const r=await fetch(`${API}/api/reports/${S.reportId}/meetings`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(r=>r.json()); S.meetingId=r.data?.id||null; }
   setSaving(false);
   if(!silent) toast('Совещание сохранено','ok');
 }
@@ -1052,9 +1053,9 @@ async function uploadProtocol(e) {
   if (S.isReadonly) return;
   const file = e.target.files[0]; if (!file) return;
   setSaving(true);
-  // Сначала сохраняем совещание чтобы получить meetingId
+  // Сначала создаём совещание чтобы получить meetingId
   if (!S.meetingId) {
-    await saveMeeting(true);
+    await saveMeeting(true, true); // force=true — создать даже пустое
   }
   if (!S.meetingId) {
     toast('Сначала сохраните данные совещания','err');
@@ -1147,12 +1148,14 @@ async function openDraftReport(reportId) {
       };
     }
     // Update header
-    // Update header date
+    // Update header date and nav bar
     const hd = document.getElementById('headerDate');
     if (hd) hd.textContent = d.report_date;
-    // Also update top bar subtitle
-    const sub = document.querySelector('.nav-sub');
-    if (sub) sub.textContent = d.report_date;
+    // Update nav bar subtitle (date shown under object name)
+    const subs = document.querySelectorAll('.nav-date, .top-date, [class*="date"]');
+    subs.forEach(el => { if(el.textContent.match(/\d{4}-\d{2}-\d{2}/)) el.textContent = d.report_date; });
+    // Update page title status pill
+    updateStatus(); updatePills();
     // Show step 1
     currentStep = 0;
     showStep(0);
