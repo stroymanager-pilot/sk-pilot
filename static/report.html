@@ -580,14 +580,14 @@ function renderInput() {
     ${!S.isReadonly?`<div class="card">
       <div class="card-h"><div class="ico">📦</div>Добавить материал</div>
       <div class="new-form">
-        <div class="row2">
-          <div><label class="fl no-mt">Наименование</label><input id="icMat" placeholder="Бетон М350..."></div>
-          <div><label class="fl no-mt">Количество</label><input id="icQty" placeholder="15 м³"></div>
+        <label class="fl no-mt">Наименование материала / конструкции</label>
+        <textarea id="icMat" placeholder="Бетон М300, ГОСТ 26633-2015; Поставка свай ж/б..." style="min-height:64px;resize:vertical;font-size:14px;width:100%"></textarea>
+        <div class="row2" style="margin-top:8px">
+          <div><label class="fl no-mt">Количество</label><input id="icQty" placeholder="15 м³" style="font-size:14px"></div>
+          <div><label class="fl no-mt">Участок</label><select id="icSec">${sectionOpts()}</select></div>
         </div>
-        <div class="row2">
-          <div><label class="fl">Документ о качестве</label><input id="icDoc" placeholder="Паспорт № 123..."></div>
-          <div><label class="fl">Участок</label><select id="icSec">${sectionOpts()}</select></div>
-        </div>
+        <label class="fl">Наименование сопроводительного документа</label>
+        <textarea id="icDoc" placeholder="Паспорт качества № 123; Журнал верификации № 1..." style="min-height:52px;resize:vertical;font-size:14px;width:100%"></textarea>
         <div class="row2">
           <div><label class="fl">Статус</label>
             <select id="icStatus" onchange="document.getElementById('icDevRow').style.display=this.value?'block':'none'">
@@ -970,11 +970,15 @@ function renderMeeting() {
           <a href="${API}/uploads/${S.meetingProtocol}" target="_blank">${S.meetingProtocolName||'Протокол.pdf'}</a>
           <button onclick="removeProtocol()">✕</button>
         </div>`:`
-        <div class="protocol-upload" onclick="document.getElementById('protocolFileInput').click()">
+        <div class="protocol-upload"
+          onclick="document.getElementById('protocolFileInput').click()"
+          ondragover="event.preventDefault();event.stopPropagation();this.style.background='var(--surface2)'"
+          ondragleave="this.style.background=''"
+          ondrop="event.preventDefault();event.stopPropagation();this.style.background='';const f=event.dataTransfer.files[0];if(f){const dt=new DataTransfer();dt.items.add(f);document.getElementById('protocolFileInput').files=dt.files;uploadProtocol({target:document.getElementById('protocolFileInput')})}">
           <span style="font-size:22px">📎</span>
           <div>
             <div style="font-size:14px;font-weight:600;color:var(--text)">Загрузить протокол</div>
-            <div style="font-size:12px;color:var(--text3)">PDF, DOC, DOCX — до 20 МБ</div>
+            <div style="font-size:12px;color:var(--text3)">PDF, DOC, DOCX — нажмите или перетащите сюда</div>
           </div>
         </div>
         <input type="file" id="protocolFileInput" accept=".pdf,.doc,.docx" style="display:none" onchange="uploadProtocol(event)">`}
@@ -1047,15 +1051,22 @@ function renderPhotos() {
 async function uploadProtocol(e) {
   if (S.isReadonly) return;
   const file = e.target.files[0]; if (!file) return;
-  await saveMeeting(true);
-  const fd = new FormData(); fd.append('file', file);
   setSaving(true);
-  const r = await fetch(`${API}/api/meetings/${S.meetingId}/protocol`, {method:'POST', body:fd}).then(r=>r.json());
+  // Сначала сохраняем совещание чтобы получить meetingId
+  if (!S.meetingId) {
+    await saveMeeting(true);
+  }
+  if (!S.meetingId) {
+    toast('Сначала сохраните данные совещания','err');
+    setSaving(false); return;
+  }
+  const fd = new FormData(); fd.append('file', file);
+  const r = await fetch(`${API}/api/meetings/${S.meetingId}/protocol`, {method:'POST', body:fd}).then(r=>r.json()).catch(()=>({ok:false}));
   if (r.ok) {
     S.meetingProtocol = r.data.file_path;
     S.meetingProtocolName = r.data.original_name || file.name;
     toast('Протокол загружен','ok');
-  } else { toast('Ошибка загрузки','err'); }
+  } else { toast('Ошибка загрузки протокола','err'); }
   setSaving(false); showStep(currentStep);
 }
 async function removeProtocol() {
@@ -1136,7 +1147,12 @@ async function openDraftReport(reportId) {
       };
     }
     // Update header
-    document.getElementById('headerDate').textContent = d.report_date;
+    // Update header date
+    const hd = document.getElementById('headerDate');
+    if (hd) hd.textContent = d.report_date;
+    // Also update top bar subtitle
+    const sub = document.querySelector('.nav-sub');
+    if (sub) sub.textContent = d.report_date;
     // Show step 1
     currentStep = 0;
     showStep(0);
