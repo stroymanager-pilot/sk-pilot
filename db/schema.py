@@ -25,6 +25,7 @@ def init_db():
         address         TEXT,
         client_name     TEXT,           -- наименование заказчика
         contract_number TEXT,           -- номер договора
+        project_id      INTEGER,        -- ссылка на проект
         is_active       INTEGER DEFAULT 1,
         created_at      TEXT DEFAULT (datetime('now'))
     );
@@ -169,6 +170,34 @@ def init_db():
                     name        TEXT NOT NULL,
                         is_active   INTEGER DEFAULT 1
                         );
+
+    -- ─────────────────────────────────────────────
+    -- ПРОЕКТЫ и ПАРТНЁРЫ
+    -- ─────────────────────────────────────────────
+
+    CREATE TABLE IF NOT EXISTS projects (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        name            TEXT NOT NULL,
+        description     TEXT,
+        tj_project_id   TEXT,
+        is_active       INTEGER DEFAULT 1,
+        created_at      TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS partners (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        name            TEXT NOT NULL,
+        type            TEXT,
+        address         TEXT,
+        contact_name    TEXT,
+        contact_role    TEXT,
+        inn             TEXT,
+        phone           TEXT,
+        email           TEXT,
+        notes           TEXT,
+        is_active       INTEGER DEFAULT 1,
+        created_at      TEXT DEFAULT (datetime('now'))
+    );
 
     -- ─────────────────────────────────────────────
     -- ИНДЕКСЫ для быстрых запросов

@@ -413,7 +413,7 @@ async function loadDashboard() {
 
 // ── ПРОЕКТЫ ──
 async function loadProjects() {
-  const res = await fetch(`${API}/api/projects`).then(r=>r.json());
+  const res = await fetch(`${API}/api/projects`).then(r=>r.json()).catch(()=>({data:[]}));
   state.projects = res.data || [];
   const el = document.getElementById('projectsList');
   if (!state.projects.length) { el.innerHTML='<div class="empty"><div class="empty-ico">🏗</div>Проектов нет</div>'; return; }
@@ -615,6 +615,15 @@ async function saveEngineer() {
 
 // ── ВСЕ СВОДКИ ──
 async function loadAllReports() {
+  // Populate project filter if not yet loaded
+  const fpEl = document.getElementById('filterProject');
+  if (fpEl && fpEl.options.length <= 1 && state.projects.length === 0) {
+    const res = await fetch(`${API}/api/projects`).then(r=>r.json()).catch(()=>({data:[]}));
+    state.projects = res.data || [];
+    state.projects.forEach(p => {
+      const opt = document.createElement('option'); opt.value=p.id; opt.textContent=p.name; fpEl.appendChild(opt);
+    });
+  }
   const projId = document.getElementById('filterProject').value;
   const userId = document.getElementById('filterEngineer').value;
   let url = `${API}/api/all_reports?`;
@@ -773,5 +782,6 @@ async function deletePhoto(id) {
 // ── START ──
 init();
 </script>
+<!-- Создан: Vlad Nikonenko & Claude (Anthropic) -->
 </body>
 </html>
