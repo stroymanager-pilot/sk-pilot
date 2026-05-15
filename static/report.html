@@ -438,7 +438,7 @@ function renderInfo() {
     <div class="card">
       <div class="card-h"><div class="ico">🏗</div>Сводка</div>
       ${[['Объект',o.name],['Адрес',o.address||'—'],['Заказчик',o.client_name||'—'],
-         ['Договор',o.contract_number||'—'],['Инженер',userName],['Дата',dateStr],
+         ['Договор',o.contract_number||'—'],['Инженер',userName],['Дата',S.report?.report_date||dateStr],
          ['Статус',`<span class="chip ${S.isReadonly?'chip-ok':'chip-draft'}">${S.isReadonly?'Сдана':'Черновик'}</span>`]
       ].map(([l,v])=>`<div class="info-row"><span class="info-lbl">${l}</span><span>${v}</span></div>`).join('')}
     </div>
@@ -1299,5 +1299,6 @@ async function submitReport() {
 
 init();
 </script>
+<!-- Создан: Vlad Nikonenko & Claude (Anthropic) -->
 </body>
 </html>

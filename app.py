@@ -1,3 +1,7 @@
+# Сводка инженера СК — Daily Report System
+# Создан: Vlad Nikonenko & Claude (Anthropic)
+# https://sk-pilot.onrender.com
+
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os, sys, hashlib, uuid
@@ -9,9 +13,43 @@ from db.schema import get_db, init_db
 app = Flask(__name__, static_folder='static', static_url_path='')
 init_db()  # Ensure DB exists on startup
 
-# Auto-migrate: добавить новые колонки если их нет
+# Auto-migrate: создать таблицы и добавить новые колонки если их нет
 def auto_migrate():
     db = get_db()
+    # Создаём таблицы, которые могут отсутствовать в старых БД
+    db.executescript("""
+    CREATE TABLE IF NOT EXISTS projects (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL, description TEXT,
+        tj_project_id TEXT, is_active INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS partners (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL, type TEXT, address TEXT,
+        contact_name TEXT, contact_role TEXT, inn TEXT,
+        phone TEXT, email TEXT, notes TEXT,
+        is_active INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS acceptance_control (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        report_id INTEGER NOT NULL REFERENCES daily_reports(id) ON DELETE CASCADE,
+        section_id INTEGER REFERENCES sections(id),
+        work_stage TEXT, controlled_operations TEXT,
+        control_method TEXT, status TEXT DEFAULT '',
+        deviation_note TEXT DEFAULT '',
+        engineer_id INTEGER REFERENCES users(id)
+    );
+    CREATE TABLE IF NOT EXISTS ks2_check (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        report_id INTEGER NOT NULL REFERENCES daily_reports(id) ON DELETE CASCADE,
+        contractor_id INTEGER REFERENCES contractors(id),
+        object_work TEXT, ks2_number TEXT,
+        has_ks6a INTEGER DEFAULT 0, has_id INTEGER DEFAULT 0
+    );
+    """)
+    db.commit()
     migrations = [
         ("ALTER TABLE operational_control ADD COLUMN status TEXT DEFAULT ''", "operational_control.status"),
         ("ALTER TABLE operational_control ADD COLUMN deviation_note TEXT DEFAULT ''", "operational_control.deviation_note"),
@@ -20,6 +58,7 @@ def auto_migrate():
         ("ALTER TABLE input_control ADD COLUMN section_id INTEGER", "input_control.section_id"),
         ("ALTER TABLE meetings ADD COLUMN protocol_path TEXT", "meetings.protocol_path"),
         ("ALTER TABLE meetings ADD COLUMN protocol_name TEXT", "meetings.protocol_name"),
+        ("ALTER TABLE objects ADD COLUMN project_id INTEGER", "objects.project_id"),
     ]
     for sql, label in migrations:
         try:
@@ -488,6 +527,7 @@ def delete_prescription(pre_id):
     return ok()
 
 
+@app.delete('/api/meetings/<int:meeting_id>')
 def delete_meeting(meeting_id):
     db = get_db()
     db.execute("DELETE FROM meetings WHERE id=?", (meeting_id,))
@@ -941,14 +981,15 @@ def all_reports():
     user_id = request.args.get('user_id')
     query = """
         SELECT dr.*, u.full_name as engineer_name,
-               o.name as object_name
+               o.name as object_name, p.name as project_name
         FROM daily_reports dr
         JOIN users u ON u.id=dr.user_id
         JOIN objects o ON o.id=dr.object_id
+        LEFT JOIN projects p ON p.id=o.project_id
         WHERE 1=1
     """
     params = []
-    # project_id filter removed (projects table not yet implemented)
+    if project_id: query += " AND o.project_id=?"; params.append(project_id)
     if object_id: query += " AND o.id=?"; params.append(object_id)
     if user_id: query += " AND dr.user_id=?"; params.append(user_id)
     query += " ORDER BY dr.report_date DESC LIMIT 200"
@@ -999,25 +1040,6 @@ def my_photos():
     """, (user_id,)).fetchall()
     db.close()
     return ok(rows_to_list(rows))
-
-# ─────────────────────────────────────────────────────────
-# ЗАГРУЗКА ПРОТОКОЛА СОВЕЩАНИЯ
-# ─────────────────────────────────────────────────────────
-
-@app.post('/api/meetings/<int:meeting_id>/protocol')
-def upload_protocol(meeting_id):
-    if 'file' not in request.files: return err('Файл не найден')
-    f = request.files['file']
-    ext = os.path.splitext(f.filename)[1].lower()
-    if ext not in ['.pdf', '.docx', '.doc', '.jpg', '.jpeg', '.png']:
-        return err('Допустимые форматы: pdf, docx, doc, jpg, png')
-    filename = f"protocol_{meeting_id}_{uuid.uuid4().hex[:8]}{ext}"
-    filepath = os.path.join(UPLOAD_FOLDER, filename)
-    f.save(filepath)
-    db = get_db()
-    db.execute("UPDATE meetings SET protocol_file=? WHERE id=?", (filename, meeting_id))
-    db.commit(); db.close()
-    return ok({'protocol_file': filename})
 
 # ─────────────────────────────────────────────────────────
 # ОБНОВЛЕНИЕ SCHEMA ДЛЯ RENDER (миграция при старте)
