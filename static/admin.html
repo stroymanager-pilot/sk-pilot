@@ -155,7 +155,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
   <div class="page-h">Проекты</div>
   <div class="page-d">Управление проектами и объектами внутри них</div>
   <div style="margin-bottom:14px">
-    <button class="btn btn-primary" onclick="openModal('project')">+ Добавить проект</button>
+    <button class="btn btn-primary" onclick="openModal_project_new()">+ Добавить проект</button>
   </div>
   <div id="projectsList"><div class="empty">Загрузка...</div></div>
 </div>
@@ -362,12 +362,13 @@ function closeModal(name) { document.getElementById('modal-'+name).classList.rem
 // ── INIT ──
 async function init() {
   try {
-    const [usersRes, partnersRes, objectsRes] = await Promise.all([
+    const [usersRes, partnersRes, objectsRes, projectsRes] = await Promise.all([
       fetch(`${API}/api/users`).then(r=>r.json()).catch(()=>({data:[]})),
       fetch(`${API}/api/partners`).then(r=>r.json()).catch(()=>({data:[]})),
       fetch(`${API}/api/objects`).then(r=>r.json()).catch(()=>({data:[]})),
+      fetch(`${API}/api/projects`).then(r=>r.json()).catch(()=>({data:[]})),
     ]);
-    state.projects = [];
+    state.projects = projectsRes.data || [];
     state.users = usersRes.data || [];
     state.partners = partnersRes.data || [];
     state.objects = objectsRes.data || [];
@@ -393,7 +394,7 @@ async function init() {
 
 // ── DASHBOARD ──
 async function loadDashboard() {
-  document.getElementById('statProjects').textContent = state.objects.length;
+  document.getElementById('statProjects').textContent = state.projects.length;
   document.getElementById('statObjects').textContent = state.objects.length;
   document.getElementById('statEngineers').textContent = state.users.filter(u=>u.role!=='admin').length;
 
@@ -683,7 +684,7 @@ async function openReport(id, date, engineer) {
     d = r.data;
     if (!d) throw new Error('Нет данных');
   } catch(e) {
-    document.getElementById('modalReportBody').innerHTML=`<div class="empty" style="color:var(--danger)">Ошибка загрузки сводки: ${e.message}</div>`;
+    document.getElementById('modalReportBody').innerHTML=`<div class="empty" style="color:var(--red)">Ошибка загрузки сводки: ${e.message}</div>`;
     return;
   }
   document.getElementById('modalReportTitle').textContent = `Сводка · ${d.report_date} · ${d.engineer_name}`;
@@ -771,7 +772,7 @@ async function openReport(id, date, engineer) {
       </div>`).join('')}
     </div>`):''}`;
   } catch(e) {
-    document.getElementById('modalReportBody').innerHTML += `<div style="color:var(--danger);font-size:12px;padding:10px;background:#fde8e8;border-radius:6px;margin-top:8px">⚠ Ошибка отображения: ${e.message}</div>`;
+    document.getElementById('modalReportBody').innerHTML += `<div style="color:var(--red);font-size:12px;padding:10px;background:#fde8e8;border-radius:6px;margin-top:8px">⚠ Ошибка отображения: ${e.message}</div>`;
   }
 }
 
