@@ -318,6 +318,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 <script>
 const API = 'https://sk.stroymanager.ru';
 const today = new Date().toISOString().split('T')[0];
+function esc(s){return s==null?'':('' +s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
 // Auth
 if (!sessionStorage.getItem('userId')) window.location.href = '/login.html';
