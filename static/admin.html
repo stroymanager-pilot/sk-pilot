@@ -304,12 +304,12 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 
 <!-- MODAL ПРОСМОТР СВОДКИ -->
 <div class="modal-bg" id="modal-report">
-  <div class="modal" style="max-width:700px">
+  <div class="modal" style="max-width:860px;width:95vw">
     <div class="modal-h">
       <span class="modal-title" id="modalReportTitle">Сводка</span>
       <button class="modal-close" onclick="closeModal('report')">✕</button>
     </div>
-    <div class="modal-body" id="modalReportBody" style="max-height:70vh;overflow-y:auto"></div>
+    <div class="modal-body" id="modalReportBody" style="max-height:82vh;overflow-y:auto;padding:20px"></div>
   </div>
 </div>
 
@@ -677,8 +677,15 @@ async function loadAllReports() {
 async function openReport(id, date, engineer) {
   openModal('report');
   document.getElementById('modalReportBody').innerHTML='<div class="empty">Загрузка...</div>';
-  const r = await fetch(`${API}/api/reports/${id}`).then(r=>r.json());
-  const d = r.data;
+  let r, d;
+  try {
+    r = await fetch(`${API}/api/reports/${id}`).then(r=>r.json());
+    d = r.data;
+    if (!d) throw new Error('Нет данных');
+  } catch(e) {
+    document.getElementById('modalReportBody').innerHTML=`<div class="empty" style="color:var(--danger)">Ошибка загрузки сводки: ${e.message}</div>`;
+    return;
+  }
   document.getElementById('modalReportTitle').textContent = `Сводка · ${d.report_date} · ${d.engineer_name}`;
   const personnel = (d.personnel||[]).filter(p=>p.headcount>0);
   const remarks = d.verbal_remarks||[];
@@ -688,7 +695,7 @@ async function openReport(id, date, engineer) {
   const photos = d.photos||[];
   const ac = d.acceptance_control||[];
   const ks2 = d.ks2_check||[];
-  document.getElementById('modalReportBody').innerHTML = `
+  try { document.getElementById('modalReportBody').innerHTML = `
     <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
       ${[['Инженер',d.engineer_name],['Дата',d.report_date],['Объект',d.object_name],
          ['Статус',d.status==='submitted'?'✅ Сдана':'📝 Черновик']].map(([l,v])=>`
@@ -763,6 +770,9 @@ async function openReport(id, date, engineer) {
         ${p.caption?`<div style="padding:4px 6px;font-size:11px;color:var(--text3)">${p.caption}</div>`:''}
       </div>`).join('')}
     </div>`):''}`;
+  } catch(e) {
+    document.getElementById('modalReportBody').innerHTML += `<div style="color:var(--danger);font-size:12px;padding:10px;background:#fde8e8;border-radius:6px;margin-top:8px">⚠ Ошибка отображения: ${e.message}</div>`;
+  }
 }
 
 function section(title, content) {
