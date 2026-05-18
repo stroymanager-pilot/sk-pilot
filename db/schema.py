@@ -1,6 +1,11 @@
 import sqlite3, os
 
-DB_PATH = os.path.join(os.path.dirname(__file__), 'pilot.db')
+# На Render используем persistent disk /var/data; локально — папка db/
+_RENDER_DISK = '/var/data'
+if os.path.isdir(_RENDER_DISK):
+    DB_PATH = os.path.join(_RENDER_DISK, 'pilot.db')
+else:
+    DB_PATH = os.path.join(os.path.dirname(__file__), 'pilot.db')
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)

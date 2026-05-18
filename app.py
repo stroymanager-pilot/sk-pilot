@@ -59,6 +59,8 @@ def auto_migrate():
         ("ALTER TABLE meetings ADD COLUMN protocol_path TEXT", "meetings.protocol_path"),
         ("ALTER TABLE meetings ADD COLUMN protocol_name TEXT", "meetings.protocol_name"),
         ("ALTER TABLE objects ADD COLUMN project_id INTEGER", "objects.project_id"),
+        ("ALTER TABLE ks2_check ADD COLUMN has_ks3 INTEGER DEFAULT 0", "ks2_check.has_ks3"),
+        ("ALTER TABLE ks2_check ADD COLUMN ks3_number TEXT", "ks2_check.ks3_number"),
     ]
     for sql, label in migrations:
         try:
@@ -680,8 +682,9 @@ def add_ks2_check(report_id):
     d = request.json or {}
     db = get_db()
     cur = db.execute(
-        "INSERT INTO ks2_check (report_id, contractor_name, object_work, ks2_number, has_ks6a, has_id, engineer_id) VALUES (?,?,?,?,?,?,?)",
+        "INSERT INTO ks2_check (report_id, contractor_name, object_work, ks2_number, ks3_number, has_ks3, has_ks6a, has_id, engineer_id) VALUES (?,?,?,?,?,?,?,?,?)",
         (report_id, d.get('contractor_name'), d.get('object_work'), d.get('ks2_number'),
+         d.get('ks3_number'), 1 if d.get('has_ks3') else 0,
          1 if d.get('has_ks6a') else 0, 1 if d.get('has_id') else 0, d.get('engineer_id'))
     )
     db.commit()
