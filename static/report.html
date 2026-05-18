@@ -444,8 +444,8 @@ function renderInfo() {
     </div>
     <div class="card">
       <div class="card-h"><div class="ico">📍</div>Участки</div>
-      ${S.allSections.length?S.allSections.map(s=>`<div class="info-row"><span>${esc(s.name)}</span><span class="chip chip-ok">активен</span></div>`).join('')
-        :'<div class="empty">Нет участков — добавьте через кнопку ⚙ Участки</div>'}
+      ${S.mySections.length?S.mySections.map(s=>`<div class="info-row"><span style="font-size:14px;font-weight:600">${esc(s.name)}</span><span class="chip chip-ok">активен</span></div>`).join('')
+        :'<div class="empty" style="padding:12px 0">Нет участков — нажмите <strong>⚙ Участки</strong> чтобы добавить</div>'}
     </div>
     <div class="card">
       <div class="card-h"><div class="ico">👷</div>Подрядчики <span class="count">${S.contractors.length}</span></div>
@@ -504,10 +504,9 @@ window.openModal = function(name) {
 };
 
 function sectionOpts(selected) {
-  // В формах показываем только личные участки инженера; если их нет — общие участки объекта
-  const opts = S.mySections.length ? S.mySections : S.sections;
-  if (!opts.length) return `<option value="">— нет участков —</option>`;
-  return opts.map(s=>`<option value="${s.id}"${s.id==selected?' selected':''}>${esc(s.name)}</option>`).join('');
+  // Только личные участки инженера; если нет — подсказка добавить
+  if (!S.mySections.length) return `<option value="">— добавьте участок через ⚙ Участки —</option>`;
+  return S.mySections.map(s=>`<option value="${s.id}"${s.id==selected?' selected':''}>${esc(s.name)}</option>`).join('');
 }
 
 // ── PERSONNEL ──
@@ -863,21 +862,32 @@ function renderKS2() {
     ${!S.isReadonly?`<div class="card">
       <div class="card-h"><div class="ico">📑</div>Добавить запись</div>
       <div class="new-form">
-        <div class="row2">
-          <div><label class="fl no-mt">Подрядная организация</label><input id="ks2Con" placeholder="ООО «Фортес»" style="font-size:15px"></div>
-          <div><label class="fl no-mt">Вид работ</label><input id="ks2Work" placeholder="Погружение свай" style="font-size:15px"></div>
+        <div style="margin-bottom:12px">
+          <label class="fl no-mt" style="font-size:14px;font-weight:700;margin-bottom:6px">Подрядная организация</label>
+          <input id="ks2Con" placeholder="ООО «Фортес»" style="font-size:16px;padding:12px 14px">
         </div>
-        <div class="row2" style="margin-top:10px">
-          <div><label class="fl no-mt">Номер акта КС-2</label><input id="ks2Num" placeholder="№ 15" style="font-size:15px"></div>
-          <div><label class="fl no-mt">Номер акта КС-3</label><input id="ks2Num3" placeholder="№ 8" style="font-size:15px"></div>
+        <div style="margin-bottom:12px">
+          <label class="fl no-mt" style="font-size:14px;font-weight:700;margin-bottom:6px">Вид работ</label>
+          <textarea id="ks2Work" placeholder="Погружение свай, монтаж опалубки..." style="font-size:16px;min-height:90px;padding:12px 14px"></textarea>
         </div>
-        <div style="margin-top:12px"><label class="fl no-mt">Наличие документов</label>
-          <div style="display:flex;gap:20px;flex-wrap:wrap;padding:10px 0">
-            <label style="display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;cursor:pointer"><input type="checkbox" id="ks2Ks6a" style="width:20px;height:20px"> КС-6а</label>
-            <label style="display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;cursor:pointer"><input type="checkbox" id="ks2Id" style="width:20px;height:20px"> ИД</label>
+        <div class="row2" style="margin-bottom:12px">
+          <div>
+            <label class="fl no-mt" style="font-size:14px;font-weight:700;margin-bottom:6px">Номер акта КС-2</label>
+            <input id="ks2Num" placeholder="№ 15" style="font-size:16px;padding:12px 14px">
+          </div>
+          <div>
+            <label class="fl no-mt" style="font-size:14px;font-weight:700;margin-bottom:6px">Номер акта КС-3</label>
+            <input id="ks2Num3" placeholder="№ 8" style="font-size:16px;padding:12px 14px">
           </div>
         </div>
-        <button class="btn-p" style="margin-top:4px" onclick="saveKS2()">+ Добавить</button>
+        <div style="margin-bottom:16px">
+          <label class="fl no-mt" style="font-size:14px;font-weight:700;margin-bottom:10px">Наличие документов</label>
+          <div style="display:flex;gap:24px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:10px;font-size:16px;font-weight:600;cursor:pointer;padding:10px 16px;background:var(--surface);border-radius:8px;border:1.5px solid var(--border)"><input type="checkbox" id="ks2Ks6a" style="width:22px;height:22px;cursor:pointer"> КС-6а</label>
+            <label style="display:flex;align-items:center;gap:10px;font-size:16px;font-weight:600;cursor:pointer;padding:10px 16px;background:var(--surface);border-radius:8px;border:1.5px solid var(--border)"><input type="checkbox" id="ks2Id" style="width:22px;height:22px;cursor:pointer"> ИД</label>
+          </div>
+        </div>
+        <button class="btn-p" style="width:100%;padding:14px;font-size:16px" onclick="saveKS2()">+ Добавить запись</button>
       </div>
     </div>`:''}
     ${S.ks2Check.length?`<div class="card">
@@ -1199,7 +1209,7 @@ async function openHistory() {
           <div style="font-size:13px;font-weight:700">${esc(r.report_date)} &nbsp;<span style="font-weight:400;color:var(--text3)">${esc(r.object_name)||'—'}</span></div>
           <span class="hist-stat ${r.status}" style="display:inline-block;margin-top:4px">${r.status==='submitted'?'✅ Сдана':'📝 Черновик'}</span>
         </div>
-        ${r.status!=='submitted'?`<button onclick="openDraftReport(${r.id})" style="padding:6px 12px;background:var(--navy3);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">✏️ Открыть</button>`:''}
+        <button onclick="openDraftReport(${r.id})" style="padding:6px 12px;background:${r.status==='submitted'?'var(--green)':'var(--navy3)'};color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">${r.status==='submitted'?'👁 Просмотр':'✏️ Открыть'}</button>
       </div>`).join('')}`
   :'<div class="empty"><div style="font-size:28px;margin-bottom:8px">📋</div>Сводок нет</div>';
 }
