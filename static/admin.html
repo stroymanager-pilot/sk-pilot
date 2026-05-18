@@ -226,9 +226,12 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
       <div class="form-row"><label class="fl">Название проекта</label><input id="projName" placeholder="ЖК «Окла»"></div>
       <div class="form-row"><label class="fl">Описание</label><textarea id="projDesc" placeholder="Жилой комплекс..."></textarea></div>
       <div class="form-row"><label class="fl">ID в TeamJect</label><input id="projTj" placeholder="Для интеграции"></div>
-      <div style="margin-top:16px"><strong style="font-size:13px">Объекты в проекте:</strong></div>
-      <div id="projObjectsList" style="margin:10px 0"></div>
-      <button class="btn btn-ghost btn-sm" onclick="addObjectToProject()">+ Добавить объект</button>
+      <div id="projObjectsSection" style="margin-top:16px;display:none">
+        <strong style="font-size:13px">Объекты в проекте:</strong>
+        <div id="projObjectsList" style="margin:10px 0"></div>
+        <button class="btn btn-ghost btn-sm" onclick="addObjectToProject()">+ Добавить объект</button>
+      </div>
+      <div id="projNewHint" style="margin-top:12px;font-size:12px;color:var(--text3)">После сохранения можно добавить объекты в проект.</div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('project')">Отмена</button>
@@ -459,6 +462,8 @@ function openModal_project_new() {
   document.getElementById('projTj').value = '';
   document.getElementById('projObjectsList').innerHTML = '';
   document.getElementById('modalProjectTitle').textContent = 'Новый проект';
+  document.getElementById('projObjectsSection').style.display = 'none';
+  document.getElementById('projNewHint').style.display = 'block';
   editingProjectObjects = [];
   openModal('project');
 }
@@ -471,7 +476,28 @@ async function editProject(id) {
   document.getElementById('projDesc').value = p.description||'';
   document.getElementById('projTj').value = p.tj_project_id||'';
   document.getElementById('modalProjectTitle').textContent = 'Редактировать проект';
+  document.getElementById('projObjectsSection').style.display = 'block';
+  document.getElementById('projNewHint').style.display = 'none';
+  // Загружаем объекты проекта
+  const objRes = await fetch(`${API}/api/projects/${id}/objects`).then(r=>r.json()).catch(()=>({data:[]}));
+  const objs = objRes.data || [];
+  document.getElementById('projObjectsList').innerHTML = objs.length
+    ? objs.map(o=>`<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">🏢 ${o.name}</div>`).join('')
+    : '<div style="font-size:12px;color:var(--text3)">Объектов нет</div>';
   openModal('project');
+}
+
+async function addObjectToProject() {
+  const projId = document.getElementById('editProjectId').value;
+  if (!projId) { toast('Сначала сохраните проект','err'); return; }
+  const name = prompt('Название объекта (например: МКД, участок 6):');
+  if (!name) return;
+  const address = prompt('Адрес объекта:') || '';
+  const client = prompt('Заказчик:') || '';
+  await fetch(`${API}/api/objects`,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({name,address,client_name:client,project_id:parseInt(projId)})});
+  toast('Объект добавлен','ok');
+  editProject(parseInt(projId)); // обновить список объектов в модале
 }
 
 async function saveProject() {

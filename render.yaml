@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: sk-pilot
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    disk:
+      name: sk-pilot-db
+      mountPath: /var/data
+      sizeGB: 1

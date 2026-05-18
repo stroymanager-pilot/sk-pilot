@@ -229,7 +229,7 @@ const STEPS = [
   {id:'acceptance', label:'Приёмочный', ico:'✅'},
   {id:'remarks', label:'Замечания', ico:'⚠️'},
   {id:'prescriptions', label:'Предписания', ico:'📋'},
-  {id:'ks2', label:'ИД/КС-2', ico:'📑'},
+  {id:'ks2', label:'ИД/КС', ico:'📑'},
   {id:'meeting', label:'Совещание', ico:'🤝'},
   {id:'photos', label:'Фото', ico:'📷'},
 ];
@@ -476,10 +476,12 @@ async function addMySection() {
   const r = await fetch(`${API}/api/objects/${S.objectId}/my_sections`,{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({name,user_id:userId})}).then(r=>r.json());
+  if (!r.ok || !r.data) { toast('Ошибка сохранения','err'); return; }
   S.mySections.push(r.data);
   S.allSections = [...S.sections,...S.mySections];
   document.getElementById('newSectionName').value='';
   renderSectionsModal();
+  showStep(currentStep); // обновить выпадашки в текущем шаге
   toast('Участок добавлен','ok');
 }
 
@@ -488,6 +490,7 @@ async function deleteMySection(id) {
   S.mySections = S.mySections.filter(s=>s.id!==id);
   S.allSections = [...S.sections,...S.mySections];
   renderSectionsModal();
+  showStep(currentStep);
   toast('Участок удалён','ok');
 }
 
@@ -501,7 +504,10 @@ window.openModal = function(name) {
 };
 
 function sectionOpts(selected) {
-  return S.allSections.map(s=>`<option value="${s.id}"${s.id==selected?' selected':''}>${esc(s.name)}</option>`).join('');
+  // В формах показываем только личные участки инженера; если их нет — общие участки объекта
+  const opts = S.mySections.length ? S.mySections : S.sections;
+  if (!opts.length) return `<option value="">— нет участков —</option>`;
+  return opts.map(s=>`<option value="${s.id}"${s.id==selected?' selected':''}>${esc(s.name)}</option>`).join('');
 }
 
 // ── PERSONNEL ──
@@ -851,44 +857,48 @@ async function deletePre(id) {
 // ── KS2 ──
 function renderKS2() {
   return `
-    <div style="font-size:19px;font-weight:800;color:var(--navy);margin-bottom:4px">ИД / КС-2</div>
-    <div style="font-size:13px;color:var(--text3);margin-bottom:14px">Проверка исполнительной документации и актов КС-2</div>
+    <div style="font-size:19px;font-weight:800;color:var(--navy);margin-bottom:4px">ИД / КС-2 / КС-3 / КС-6а</div>
+    <div style="font-size:13px;color:var(--text3);margin-bottom:14px">Исполнительная документация, акты КС-2, КС-3, КС-6а</div>
     ${S.isReadonly?'<div class="readonly-banner">✅ Сводка сдана — редактирование недоступно</div>':''}
     ${!S.isReadonly?`<div class="card">
       <div class="card-h"><div class="ico">📑</div>Добавить запись</div>
       <div class="new-form">
         <div class="row2">
-          <div><label class="fl no-mt">Подрядная организация</label><input id="ks2Con" placeholder="ООО «Фортес»"></div>
-          <div><label class="fl no-mt">Вид работ</label><input id="ks2Work" placeholder="Погружение свай"></div>
+          <div><label class="fl no-mt">Подрядная организация</label><input id="ks2Con" placeholder="ООО «Фортес»" style="font-size:15px"></div>
+          <div><label class="fl no-mt">Вид работ</label><input id="ks2Work" placeholder="Погружение свай" style="font-size:15px"></div>
         </div>
-        <div class="row2">
-          <div><label class="fl">Номер акта КС-2</label><input id="ks2Num" placeholder="№ 15"></div>
-          <div><label class="fl">Документы</label>
-            <div style="display:flex;gap:16px;padding:10px 0">
-              <label style="display:flex;align-items:center;gap:6px;font-size:14px;font-weight:600;cursor:pointer"><input type="checkbox" id="ks2Ks6a" style="width:18px;height:18px"> КС-6а</label>
-              <label style="display:flex;align-items:center;gap:6px;font-size:14px;font-weight:600;cursor:pointer"><input type="checkbox" id="ks2Id" style="width:18px;height:18px"> ИД</label>
-            </div>
+        <div class="row2" style="margin-top:10px">
+          <div><label class="fl no-mt">Номер акта КС-2</label><input id="ks2Num" placeholder="№ 15" style="font-size:15px"></div>
+          <div><label class="fl no-mt">Номер акта КС-3</label><input id="ks2Num3" placeholder="№ 8" style="font-size:15px"></div>
+        </div>
+        <div style="margin-top:12px"><label class="fl no-mt">Наличие документов</label>
+          <div style="display:flex;gap:20px;flex-wrap:wrap;padding:10px 0">
+            <label style="display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;cursor:pointer"><input type="checkbox" id="ks2Ks6a" style="width:20px;height:20px"> КС-6а</label>
+            <label style="display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;cursor:pointer"><input type="checkbox" id="ks2Id" style="width:20px;height:20px"> ИД</label>
           </div>
         </div>
-        <button class="btn-p" onclick="saveKS2()">+ Добавить</button>
+        <button class="btn-p" style="margin-top:4px" onclick="saveKS2()">+ Добавить</button>
       </div>
     </div>`:''}
     ${S.ks2Check.length?`<div class="card">
       <div class="card-h"><div class="ico">📋</div>Записи <span class="count">${S.ks2Check.length}</span></div>
-      <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <tr><th style="text-align:left;padding:6px 4px;border-bottom:2px solid var(--border);font-size:11px;color:var(--text3);text-transform:uppercase">Организация</th>
-        <th style="text-align:left;padding:6px 4px;border-bottom:2px solid var(--border);font-size:11px;color:var(--text3);text-transform:uppercase">Вид работ</th>
-        <th style="padding:6px 4px;border-bottom:2px solid var(--border);font-size:11px;color:var(--text3)">КС-2</th>
-        <th style="padding:6px 4px;border-bottom:2px solid var(--border);font-size:11px;color:var(--text3)">КС-6а</th>
-        <th style="padding:6px 4px;border-bottom:2px solid var(--border);font-size:11px;color:var(--text3)">ИД</th>
-        ${!S.isReadonly?'<th></th>':''}</tr>
+      <table style="width:100%;border-collapse:collapse;font-size:14px">
+        <tr style="background:var(--surface)">
+          <th style="text-align:left;padding:8px 6px;border-bottom:2px solid var(--border);font-size:12px;color:var(--text3);font-weight:700">Организация</th>
+          <th style="text-align:left;padding:8px 6px;border-bottom:2px solid var(--border);font-size:12px;color:var(--text3);font-weight:700">Вид работ</th>
+          <th style="padding:8px 6px;border-bottom:2px solid var(--border);font-size:12px;color:var(--text3);font-weight:700;text-align:center">КС-2</th>
+          <th style="padding:8px 6px;border-bottom:2px solid var(--border);font-size:12px;color:var(--text3);font-weight:700;text-align:center">КС-3</th>
+          <th style="padding:8px 6px;border-bottom:2px solid var(--border);font-size:12px;color:var(--text3);font-weight:700;text-align:center">КС-6а</th>
+          <th style="padding:8px 6px;border-bottom:2px solid var(--border);font-size:12px;color:var(--text3);font-weight:700;text-align:center">ИД</th>
+          ${!S.isReadonly?'<th></th>':''}</tr>
         ${S.ks2Check.map(k=>`<tr>
-          <td style="padding:8px 4px;border-bottom:1px solid var(--surface2)">${esc(k.contractor_name)||'—'}</td>
-          <td style="padding:8px 4px;border-bottom:1px solid var(--surface2)">${esc(k.object_work)||'—'}</td>
-          <td style="padding:8px 4px;border-bottom:1px solid var(--surface2);font-family:var(--mono);text-align:center">${esc(k.ks2_number)||'—'}</td>
-          <td style="padding:8px 4px;border-bottom:1px solid var(--surface2);text-align:center;color:${k.has_ks6a?'var(--green)':'var(--text3)'};font-weight:700">${k.has_ks6a?'✓':'—'}</td>
-          <td style="padding:8px 4px;border-bottom:1px solid var(--surface2);text-align:center;color:${k.has_id?'var(--green)':'var(--text3)'};font-weight:700">${k.has_id?'✓':'—'}</td>
-          ${!S.isReadonly?`<td style="padding:8px 4px;border-bottom:1px solid var(--surface2)"><button class="p-rm" onclick="deleteKS2(${k.id})">✕</button></td>`:''}</tr>`).join('')}
+          <td style="padding:10px 6px;border-bottom:1px solid var(--surface2);font-size:14px;font-weight:600">${esc(k.contractor_name)||'—'}</td>
+          <td style="padding:10px 6px;border-bottom:1px solid var(--surface2);font-size:14px">${esc(k.object_work)||'—'}</td>
+          <td style="padding:10px 6px;border-bottom:1px solid var(--surface2);font-family:var(--mono);font-size:13px;text-align:center">${esc(k.ks2_number)||'—'}</td>
+          <td style="padding:10px 6px;border-bottom:1px solid var(--surface2);font-family:var(--mono);font-size:13px;text-align:center">${esc(k.ks3_number||'')||'—'}</td>
+          <td style="padding:10px 6px;border-bottom:1px solid var(--surface2);text-align:center;font-size:16px;color:${k.has_ks6a?'var(--green)':'var(--text3)'};font-weight:700">${k.has_ks6a?'✓':'—'}</td>
+          <td style="padding:10px 6px;border-bottom:1px solid var(--surface2);text-align:center;font-size:16px;color:${k.has_id?'var(--green)':'var(--text3)'};font-weight:700">${k.has_id?'✓':'—'}</td>
+          ${!S.isReadonly?`<td style="padding:10px 6px;border-bottom:1px solid var(--surface2)"><button class="p-rm" onclick="deleteKS2(${k.id})">✕</button></td>`:''}</tr>`).join('')}
       </table>
     </div>`:''}`;
 }
@@ -901,6 +911,8 @@ async function saveKS2() {
   const r=await fetch(`${API}/api/reports/${S.reportId}/ks2_check`,{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({contractor_name:c,object_work:document.getElementById('ks2Work').value,
       ks2_number:document.getElementById('ks2Num').value,
+      ks3_number:document.getElementById('ks2Num3').value,
+      has_ks3:document.getElementById('ks2Num3').value?1:0,
       has_ks6a:document.getElementById('ks2Ks6a').checked,
       has_id:document.getElementById('ks2Id').checked,engineer_id:userId})}).then(r=>r.json());
   S.ks2Check.push(r.data); setSaving(false); toast('Добавлено','ok'); showStep(currentStep);
@@ -1136,6 +1148,14 @@ async function openDraftReport(reportId) {
     S.photos = d.photos || [];
     S.remarks = d.verbal_remarks || [];
     S.prescriptions = d.prescriptions || [];
+    // Обновляем объект и личные участки для этой сводки
+    if (d.object_id && d.object_id !== S.objectId) {
+      S.objectId = d.object_id;
+      sessionStorage.setItem('objectId', S.objectId);
+    }
+    const mySecs = await fetchWithRetry(`${API}/api/objects/${S.objectId}/my_sections?user_id=${userId}`).then(r=>r.json()).catch(()=>({data:[]}));
+    S.mySections = mySecs.data || [];
+    S.allSections = [...(S.sections||[]), ...S.mySections];
     const m = d.meetings?.[0];
     if (m) {
       S.meetingId = m.id;
