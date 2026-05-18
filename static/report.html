@@ -209,7 +209,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 <div class="toast" id="toast"></div>
 
 <script>
-const API = 'https://sk-pilot.onrender.com';
+const API = 'https://sk.stroymanager.ru';
 if (!sessionStorage.getItem('userId')) window.location.href = '/login.html';
 const userId = parseInt(sessionStorage.getItem('userId'));
 const userName = sessionStorage.getItem('userName') || 'Инженер';
@@ -311,7 +311,7 @@ async function init() {
     showStep(0);
   } catch(e) {
     console.error(e);
-    document.getElementById('main').innerHTML='<div class="card"><div style="padding:20px;color:var(--red)"><strong>Ошибка подключения</strong><br><br><code style="font-family:var(--mono);background:var(--surface);padding:4px 8px;border-radius:4px;font-size:13px">https://sk-pilot.onrender.com</code></div></div>';
+    document.getElementById('main').innerHTML='<div class="card"><div style="padding:20px;color:var(--red)"><strong>Ошибка подключения</strong><br><br><code style="font-family:var(--mono);background:var(--surface);padding:4px 8px;border-radius:4px;font-size:13px">https://sk.stroymanager.ru</code></div></div>';
   }
 }
 
