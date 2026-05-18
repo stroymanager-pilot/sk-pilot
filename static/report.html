@@ -1009,9 +1009,9 @@ function renderMeeting() {
 
 function restoreMeetingFields() {
   setTimeout(()=>{
-    ['mDay','mLoc','mTime','mPart','mAgenda'].forEach(id=>{
+    ['mDate','mLoc','mTime','mPart','mAgenda'].forEach(id=>{
       const el=document.getElementById(id); if(!el)return;
-      if(id==='mDay') el.value=_meetingData.day;
+      if(id==='mDate') el.value=_meetingData.date||_meetingData.day||'';
       else if(id==='mLoc') el.value=_meetingData.loc;
       else if(id==='mTime') el.value=_meetingData.time;
       else if(id==='mPart') el.value=_meetingData.part;
@@ -1041,8 +1041,8 @@ async function saveMeeting(silent=false, force=false) {
 }
 
 function clearMeeting() {
-  _meetingData={day:'',loc:'',time:'',part:'',agenda:''};
-  ['mDay','mLoc','mTime','mPart','mAgenda'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  _meetingData={date:'',day:'',loc:'',time:'',part:'',agenda:''};
+  ['mDate','mLoc','mTime','mPart','mAgenda'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
 }
 
 // ── PHOTOS ──
@@ -1150,14 +1150,14 @@ async function openDraftReport(reportId) {
     if (!d) { toast('Сводка не найдена','err'); return; }
     S.reportId = reportId;
     S.report = d;
-    S.isReadonly = false;
+    S.isReadonly = d.status === 'submitted';
     S.inputControl = d.input_control || [];
     S.acceptanceControl = d.acceptance_control || [];
     S.ks2Check = d.ks2_check || [];
     S.personnel = d.personnel || [];
     S.photos = d.photos || [];
     S.remarks = d.verbal_remarks || [];
-    S.prescriptions = d.prescriptions || [];
+    S.prescriptions = d.prescriptions_log || [];
     // Обновляем объект и личные участки для этой сводки
     if (d.object_id && d.object_id !== S.objectId) {
       S.objectId = d.object_id;

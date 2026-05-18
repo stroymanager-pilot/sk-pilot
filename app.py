@@ -61,6 +61,9 @@ def auto_migrate():
         ("ALTER TABLE objects ADD COLUMN project_id INTEGER", "objects.project_id"),
         ("ALTER TABLE ks2_check ADD COLUMN has_ks3 INTEGER DEFAULT 0", "ks2_check.has_ks3"),
         ("ALTER TABLE ks2_check ADD COLUMN ks3_number TEXT", "ks2_check.ks3_number"),
+        ("ALTER TABLE ks2_check ADD COLUMN contractor_name TEXT", "ks2_check.contractor_name"),
+        ("ALTER TABLE ks2_check ADD COLUMN engineer_id INTEGER", "ks2_check.engineer_id"),
+        ("ALTER TABLE meetings ADD COLUMN protocol_path TEXT", "meetings.protocol_path2"),
     ]
     for sql, label in migrations:
         try:
@@ -148,7 +151,7 @@ def get_object(obj_id):
 def update_object(obj_id):
     d = request.json or {}
     db = get_db()
-    fields = ['name', 'address', 'client_name', 'contract_number', 'tj_object_id', 'is_active']
+    fields = ['name', 'address', 'client_name', 'contract_number', 'tj_object_id', 'is_active', 'project_id']
     updates = {k: v for k, v in d.items() if k in fields}
     if not updates:
         db.close(); return err('Нет полей для обновления')
@@ -733,13 +736,14 @@ def run_migration():
         db.execute("INSERT OR IGNORE INTO objects (name,address,client_name,tj_object_id) VALUES ('IQ Гатчина (участок 6)','Ленинградская обл., г. Гатчина','ЛСТ Генподряд','tj_gatchina_006')")
         gid = db.execute("SELECT id FROM objects WHERE tj_object_id='tj_gatchina_006'").fetchone()[0]
         uid = db.execute("SELECT id FROM users WHERE email='uhov@stroymanager.ru'").fetchone()[0]
-        aid = db.execute("SELECT id FROM users WHERE role='admin'").fetchone()[0]
+        aid_row = db.execute("SELECT id FROM users WHERE role='admin'").fetchone()
+        aid = aid_row[0] if aid_row else None
         for name in ['Пятно застройки','Блок 3','ПОС']:
             db.execute("INSERT OR IGNORE INTO sections (object_id,name) VALUES (?,?)",(gid,name))
         for name,wt in [('ООО Гелиос','ПОС, замещение грунта'),('ООО Фортес','Лидерное бурение, сваи')]:
             db.execute("INSERT OR IGNORE INTO contractors (object_id,name,work_type) VALUES (?,?,?)",(gid,name,wt))
         db.execute("INSERT OR IGNORE INTO object_users (object_id,user_id) VALUES (?,?)",(gid,uid))
-        db.execute("INSERT OR IGNORE INTO object_users (object_id,user_id) VALUES (?,?)",(gid,aid))
+        if aid: db.execute("INSERT OR IGNORE INTO object_users (object_id,user_id) VALUES (?,?)",(gid,aid))
         db.commit()
         db.close()
         return ok('Миграция выполнена успешно')
@@ -772,6 +776,8 @@ def fix_duplicates():
         return err(str(e))
 
 
+@app.get('/api/objects/<int:obj_id>/open_remarks')
+def open_remarks(obj_id):
     db = get_db()
     rows = db.execute("""
         SELECT vr.*, dr.report_date, s.name as section_name, u.full_name as engineer_name
@@ -1020,7 +1026,7 @@ def all_photos():
         WHERE 1=1
     """
     params = []
-    if project_id: query += " AND p.id=?"; params.append(project_id)
+    if project_id: query += " AND o.project_id=?"; params.append(project_id)
     if object_id: query += " AND o.id=?"; params.append(object_id)
     query += " ORDER BY ph.uploaded_at DESC"
     rows = db.execute(query, params).fetchall()
