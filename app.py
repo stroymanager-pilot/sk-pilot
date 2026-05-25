@@ -137,13 +137,13 @@ def get_object(obj_id):
     sections = db.execute("SELECT * FROM sections WHERE object_id=? AND is_active=1", (obj_id,)).fetchall()
 
     # Автосинхронизация: добавляем глобальных партнёров как подрядчиков объекта
-    partners = db.execute("SELECT name, work_type FROM partners WHERE is_active=1").fetchall()
+    partners = db.execute("SELECT name, type FROM partners WHERE is_active=1").fetchall()
     existing_names = {r['name'] for r in db.execute(
         "SELECT name FROM contractors WHERE object_id=?", (obj_id,)).fetchall()}
     for p in partners:
         if p['name'] not in existing_names:
             db.execute("INSERT INTO contractors (object_id, name, work_type) VALUES (?,?,?)",
-                       (obj_id, p['name'], p['work_type']))
+                       (obj_id, p['name'], p['type']))
     db.commit()
 
     contractors = db.execute("SELECT * FROM contractors WHERE object_id=? AND is_active=1", (obj_id,)).fetchall()
