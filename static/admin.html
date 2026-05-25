@@ -127,6 +127,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
   <div class="sb-item" data-page="reports" onclick="nav(this)"><span class="ico">📋</span> Все сводки</div>
   <div class="sb-item" data-page="photos" onclick="nav(this)"><span class="ico">📷</span> Все фото</div>
   <div class="sb-bottom">
+    <button class="logout-btn" onclick="downloadBackup()" style="margin-bottom:6px;color:rgba(255,255,255,.7)">💾 Скачать резервную копию</button>
     <button class="logout-btn" onclick="logout()">← Выйти</button>
   </div>
 </div>
@@ -327,6 +328,11 @@ const userRole = sessionStorage.getItem('userRole');
 const userName = sessionStorage.getItem('userName') || 'Администратор';
 if (userRole !== 'admin') window.location.href = '/report.html';
 function logout() { sessionStorage.clear(); window.location.href = '/login.html'; }
+function downloadBackup() {
+  const a = document.createElement('a');
+  a.href = `${API}/api/admin/backup_db?user_id=${userId}`;
+  a.click();
+}
 
 document.getElementById('sbRole').textContent = userName;
 document.getElementById('dashDate').textContent = new Date().toLocaleDateString('ru-RU', {weekday:'long',day:'numeric',month:'long',year:'numeric'});
