@@ -303,6 +303,27 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
   </div>
 </div>
 
+<!-- MODAL ПОДРЯДЧИКИ -->
+<div class="modal-bg" id="modal-contractors">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-h">
+      <span class="modal-title" id="contractorsTitle">Подрядчики</span>
+      <button class="modal-close" onclick="closeModal('contractors')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="contractorsList" style="margin-bottom:16px"></div>
+      <div style="border-top:1px solid var(--border);padding-top:14px">
+        <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:10px">Добавить подрядчика</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <input id="newConName" placeholder="Название: ООО «ГСМК»" style="font-size:15px">
+          <input id="newConWork" placeholder="Вид работ: Монолитные работы" style="font-size:15px">
+          <button class="btn btn-primary" onclick="addContractor()">+ Добавить</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL ПРОСМОТР СВОДКИ -->
 <div class="modal-bg" id="modal-report">
   <div class="modal" style="max-width:860px;width:95vw">
@@ -455,6 +476,7 @@ async function loadProjects() {
             <div class="list-actions">
               <button class="btn btn-ghost btn-xs" onclick="editObject(${o.id},${p.id})">✏</button>
               <button class="btn btn-ghost btn-xs" onclick="assignEngineerToObject(${o.id})">👷</button>
+              <button class="btn btn-ghost btn-xs" onclick="manageContractors(${o.id},'${o.name.replace(/'/g,'')}')">🏗 Подрядчики</button>
             </div>
           </div>`).join('')
         : '<div class="empty" style="padding:16px">Нет объектов</div>'}
@@ -530,6 +552,56 @@ async function addObjectModal(projectId) {
   await fetch(`${API}/api/objects`,{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({name,address,client_name:client,project_id:projectId})});
   toast('Объект добавлен','ok'); await init(); loadProjects();
+}
+
+// ── ПОДРЯДЧИКИ ──
+let _curObjId = null;
+async function manageContractors(objId, objName) {
+  _curObjId = objId;
+  document.getElementById('contractorsTitle').textContent = `Подрядчики · ${objName}`;
+  document.getElementById('newConName').value = '';
+  document.getElementById('newConWork').value = '';
+  await refreshContractors();
+  openModal('contractors');
+}
+async function refreshContractors() {
+  const res = await fetch(`${API}/api/objects/${_curObjId}`).then(r=>r.json());
+  const contractors = res.data?.contractors || [];
+  const el = document.getElementById('contractorsList');
+  if (!contractors.length) {
+    el.innerHTML = '<div class="empty" style="padding:8px 0">Подрядчиков нет — добавьте первого</div>';
+    return;
+  }
+  el.innerHTML = contractors.map(c=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:600">${esc(c.name)}</div>
+        <div style="font-size:12px;color:var(--text3)">${esc(c.work_type||'—')}</div>
+      </div>
+      <button class="btn btn-danger btn-xs" onclick="deleteContractor(${c.id})">✕ Удалить</button>
+    </div>`).join('');
+}
+async function addContractor() {
+  const name = document.getElementById('newConName').value.trim();
+  if (!name) { toast('Укажите название','err'); return; }
+  const work_type = document.getElementById('newConWork').value.trim();
+  await fetch(`${API}/api/objects/${_curObjId}/contractors`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({name, work_type})
+  });
+  document.getElementById('newConName').value = '';
+  document.getElementById('newConWork').value = '';
+  await refreshContractors();
+  toast('Подрядчик добавлен','ok');
+}
+async function deleteContractor(id) {
+  if (!confirm('Удалить подрядчика?')) return;
+  await fetch(`${API}/api/contractors/${id}`, {
+    method:'PATCH', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({is_active: 0})
+  });
+  await refreshContractors();
+  toast('Подрядчик удалён','ok');
 }
 
 async function editObject(objId, projId) {
