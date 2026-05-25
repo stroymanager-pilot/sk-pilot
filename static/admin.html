@@ -127,7 +127,8 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
   <div class="sb-item" data-page="reports" onclick="nav(this)"><span class="ico">📋</span> Все сводки</div>
   <div class="sb-item" data-page="photos" onclick="nav(this)"><span class="ico">📷</span> Все фото</div>
   <div class="sb-bottom">
-    <button class="logout-btn" onclick="downloadBackup()" style="margin-bottom:6px;color:rgba(255,255,255,.7)">💾 Скачать резервную копию</button>
+    <button class="logout-btn" onclick="downloadExportZip()" style="margin-bottom:6px;color:rgba(255,255,255,.9);background:rgba(212,168,67,.2)">📦 Экспорт (ZIP)</button>
+    <button class="logout-btn" onclick="downloadBackup()" style="margin-bottom:6px;color:rgba(255,255,255,.7)">💾 Резервная копия (.db)</button>
     <button class="logout-btn" onclick="logout()">← Выйти</button>
   </div>
 </div>
@@ -269,6 +270,9 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
       </div>
       <div class="form-row"><label class="fl">Email</label><input id="partEmail" placeholder="info@company.ru"></div>
       <div class="form-row"><label class="fl">Адрес</label><input id="partAddr" placeholder="г. Санкт-Петербург..."></div>
+      <div class="form-row"><label class="fl">Проект <span style="font-weight:400;color:var(--text3)">(оставьте пустым — виден во всех проектах)</span></label>
+        <select id="partProject"><option value="">— все проекты —</option></select>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('partner')">Отмена</button>
@@ -354,6 +358,12 @@ function downloadBackup() {
   const a = document.createElement('a');
   a.href = `${API}/api/admin/backup_db?user_id=${userId}`;
   a.click();
+}
+function downloadExportZip(projectId) {
+  const a = document.createElement('a');
+  let url = `${API}/api/admin/export_zip?user_id=${userId}`;
+  if (projectId) url += `&project_id=${projectId}`;
+  a.href = url; a.click();
 }
 
 document.getElementById('sbRole').textContent = userName;
@@ -641,7 +651,13 @@ function openNewPartner() {
   document.getElementById('partPhone').value = '';
   document.getElementById('partEmail').value = '';
   document.getElementById('partAddr').value = '';
+  document.getElementById('partProject').value = '';
   document.getElementById('modalPartnerTitle').textContent = 'Новый партнёр';
+  // Заполняем список проектов в селекте
+  const sel = document.getElementById('partProject');
+  if (sel.options.length <= 1) {
+    state.projects.forEach(p => { const o=document.createElement('option'); o.value=p.id; o.textContent=p.name; sel.appendChild(o); });
+  }
   openModal('partner');
 }
 
@@ -668,10 +684,12 @@ async function loadPartners() {
 
 async function savePartner() {
   const id = document.getElementById('editPartnerId').value;
+  const projVal = document.getElementById('partProject').value;
   const data = {name:document.getElementById('partName').value.trim(),type:document.getElementById('partType').value,
     contact_name:document.getElementById('partContact').value,contact_role:document.getElementById('partRole').value,
     inn:document.getElementById('partInn').value,phone:document.getElementById('partPhone').value,
-    email:document.getElementById('partEmail').value,address:document.getElementById('partAddr').value};
+    email:document.getElementById('partEmail').value,address:document.getElementById('partAddr').value,
+    project_id: projVal ? parseInt(projVal) : null};
   if (!data.name) { toast('Укажите название','err'); return; }
   if (id) await fetch(`${API}/api/partners/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
   else await fetch(`${API}/api/partners`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
@@ -681,6 +699,11 @@ async function savePartner() {
 function editPartner(id) {
   const p = state.partners.find(p=>p.id===id);
   if (!p) return;
+  // Заполняем список проектов если не заполнен
+  const sel = document.getElementById('partProject');
+  if (sel.options.length <= 1) {
+    state.projects.forEach(pr => { const o=document.createElement('option'); o.value=pr.id; o.textContent=pr.name; sel.appendChild(o); });
+  }
   document.getElementById('editPartnerId').value = id;
   document.getElementById('partName').value = p.name||'';
   document.getElementById('partType').value = p.type||'Заказчик';
@@ -690,6 +713,7 @@ function editPartner(id) {
   document.getElementById('partPhone').value = p.phone||'';
   document.getElementById('partEmail').value = p.email||'';
   document.getElementById('partAddr').value = p.address||'';
+  document.getElementById('partProject').value = p.project_id||'';
   document.getElementById('modalPartnerTitle').textContent = 'Редактировать партнёра';
   openModal('partner');
 }
@@ -703,26 +727,41 @@ async function deletePartner(id) {
 // ── ИНЖЕНЕРЫ ──
 async function loadEngineers() {
   const el = document.getElementById('engineersList');
-  // Обогащаем инженеров данными об объектах
   const engineers = state.users;
   if (!engineers.length) { el.innerHTML='<div class="card"><div class="empty">Нет инженеров</div></div>'; return; }
-  // Получаем объекты для каждого инженера
-  const objMap = {};
-  state.objects.forEach(o=>{ if (!objMap[o.id]) objMap[o.id]=o.name; });
-  // Собираем назначения: объект → инженеры
-  const userObjs = {};
-  // Простая карта: инженер → список объектов из state.objects (у каждого объекта нет user_list в state)
-  // Показываем ФИО, email, роль и кнопки
+
+  // Загружаем назначения: для каждого объекта получаем список инженеров
+  // Строим карту: user_id → [{object_name, project_name}]
+  const userAssign = {};
+  engineers.forEach(u => userAssign[u.id] = []);
+  // Запрашиваем объекты с инженерами из projects API
+  try {
+    const allObjs = await fetch(`${API}/api/objects`).then(r=>r.json());
+    const projMap = {};
+    state.projects.forEach(p => projMap[p.id] = p.name);
+    for (const obj of (allObjs.data||[])) {
+      const objDetail = await fetch(`${API}/api/objects/${obj.id}`).then(r=>r.json());
+      (objDetail.data?.engineers||[]).forEach(eng => {
+        if (userAssign[eng.id]) userAssign[eng.id].push({obj: obj.name, proj: projMap[obj.project_id]||''});
+      });
+    }
+  } catch(e) {}
+
   el.innerHTML = `<div class="card"><div style="padding:0">${engineers.map(u=>{
     const initials = u.full_name.split(' ').slice(0,2).map(n=>n[0]).join('');
     const roleLabel = u.role==='admin'?'Администратор':u.role==='senior'?'Главный инженер':'Инженер СК';
     const badgeClass = u.role==='admin'?'badge-admin':'badge-eng';
     const isActive = u.is_active !== 0;
+    const assigns = userAssign[u.id]||[];
+    const assignText = assigns.length
+      ? assigns.map(a=>`<span style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:11px;margin-right:3px">${esc(a.proj?a.proj+' → ':'') + esc(a.obj)}</span>`).join('')
+      : '<span style="color:var(--text3);font-size:11px">не назначен</span>';
     return `<div class="list-item" style="${isActive?'':'opacity:.5;background:#f9f9f9'}">
       <div class="list-avatar" style="${isActive?'':'background:#ddd'}">${initials}</div>
       <div class="list-body">
         <div class="list-name">${esc(u.full_name)}${isActive?'':' <span style="font-size:11px;color:var(--text3)">(архив)</span>'}</div>
         <div class="list-sub">${esc(u.email)}</div>
+        <div style="margin-top:4px">${assignText}</div>
       </div>
       <div class="list-actions" style="align-items:center">
         <span class="badge ${badgeClass}">${roleLabel}</span>

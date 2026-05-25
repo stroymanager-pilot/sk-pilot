@@ -65,6 +65,7 @@ def auto_migrate():
         ("ALTER TABLE ks2_check ADD COLUMN engineer_id INTEGER", "ks2_check.engineer_id"),
         ("ALTER TABLE meetings ADD COLUMN protocol_path TEXT", "meetings.protocol_path2"),
         ("ALTER TABLE users ADD COLUMN is_active INTEGER DEFAULT 1", "users.is_active"),
+        ("ALTER TABLE partners ADD COLUMN project_id INTEGER", "partners.project_id"),
     ]
     for sql, label in migrations:
         try:
@@ -136,8 +137,15 @@ def get_object(obj_id):
         db.close(); return err('Объект не найден', 404)
     sections = db.execute("SELECT * FROM sections WHERE object_id=? AND is_active=1", (obj_id,)).fetchall()
 
-    # Автосинхронизация: добавляем глобальных партнёров как подрядчиков объекта
-    partners = db.execute("SELECT name, type FROM partners WHERE is_active=1").fetchall()
+    # Автосинхронизация: добавляем партнёров проекта как подрядчиков объекта
+    obj_project_id = row['project_id']
+    if obj_project_id:
+        partners = db.execute(
+            "SELECT name, type FROM partners WHERE is_active=1 AND (project_id=? OR project_id IS NULL)",
+            (obj_project_id,)
+        ).fetchall()
+    else:
+        partners = db.execute("SELECT name, type FROM partners WHERE is_active=1 AND project_id IS NULL").fetchall()
     existing_names = {r['name'] for r in db.execute(
         "SELECT name FROM contractors WHERE object_id=?", (obj_id,)).fetchall()}
     for p in partners:
@@ -894,7 +902,14 @@ def project_objects(proj_id):
 @app.get('/api/partners')
 def list_partners():
     db = get_db()
-    rows = db.execute("SELECT * FROM partners WHERE is_active=1 ORDER BY name").fetchall()
+    project_id = request.args.get('project_id')
+    if project_id:
+        rows = db.execute(
+            "SELECT * FROM partners WHERE is_active=1 AND (project_id=? OR project_id IS NULL) ORDER BY name",
+            (project_id,)
+        ).fetchall()
+    else:
+        rows = db.execute("SELECT * FROM partners WHERE is_active=1 ORDER BY name").fetchall()
     db.close()
     return ok(rows_to_list(rows))
 
@@ -903,10 +918,11 @@ def create_partner():
     d = request.json or {}
     if not d.get('name'): return err('name обязателен')
     db = get_db()
-    cur = db.execute("""INSERT INTO partners (name, type, address, contact_name, contact_role, inn, phone, email, notes)
-        VALUES (?,?,?,?,?,?,?,?,?)""",
+    cur = db.execute("""INSERT INTO partners (name, type, address, contact_name, contact_role, inn, phone, email, notes, project_id)
+        VALUES (?,?,?,?,?,?,?,?,?,?)""",
         (d['name'], d.get('type'), d.get('address'), d.get('contact_name'),
-         d.get('contact_role'), d.get('inn'), d.get('phone'), d.get('email'), d.get('notes')))
+         d.get('contact_role'), d.get('inn'), d.get('phone'), d.get('email'), d.get('notes'),
+         d.get('project_id') or None))
     db.commit()
     row = db.execute("SELECT * FROM partners WHERE id=?", (cur.lastrowid,)).fetchone()
     db.close()
@@ -916,7 +932,7 @@ def create_partner():
 def update_partner(pid):
     d = request.json or {}
     db = get_db()
-    fields = ['name', 'type', 'address', 'contact_name', 'contact_role', 'inn', 'phone', 'email', 'notes', 'is_active']
+    fields = ['name', 'type', 'address', 'contact_name', 'contact_role', 'inn', 'phone', 'email', 'notes', 'is_active', 'project_id']
     updates = {k: v for k, v in d.items() if k in fields}
     if updates:
         sql = ', '.join(f"{k}=?" for k in updates)
@@ -1030,6 +1046,92 @@ def all_reports():
     rows = db.execute(query, params).fetchall()
     db.close()
     return ok(rows_to_list(rows))
+
+# ─────────────────────────────────────────────────────────
+# ЭКСПОРТ — ZIP архив со сводками и фото
+# ─────────────────────────────────────────────────────────
+
+@app.get('/api/admin/export_zip')
+def export_zip():
+    import zipfile, io, csv, os
+    user_id = request.args.get('user_id')
+    project_id = request.args.get('project_id')
+    db = get_db()
+    # Проверка прав
+    user = db.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
+    if not user or user['role'] != 'admin':
+        db.close(); return err('Доступ запрещён', 403)
+
+    # Загружаем сводки
+    q = """SELECT dr.id, dr.report_date, dr.status, dr.submitted_at,
+                  u.full_name as engineer, o.name as object_name,
+                  COALESCE(p.name,'') as project_name
+           FROM daily_reports dr
+           JOIN users u ON u.id=dr.user_id
+           JOIN objects o ON o.id=dr.object_id
+           LEFT JOIN projects p ON p.id=o.project_id
+           WHERE 1=1"""
+    params = []
+    if project_id: q += " AND o.project_id=?"; params.append(project_id)
+    q += " ORDER BY dr.report_date DESC"
+    reports = db.execute(q, params).fetchall()
+
+    # Загружаем фото
+    pq = """SELECT ph.file_path, ph.caption, u.full_name as engineer,
+                   o.name as object_name, COALESCE(p.name,'') as project_name,
+                   dr.report_date, dr.id as report_id
+            FROM photos ph
+            JOIN daily_reports dr ON dr.id=ph.report_id
+            JOIN users u ON u.id=dr.user_id
+            JOIN objects o ON o.id=dr.object_id
+            LEFT JOIN projects p ON p.id=o.project_id
+            WHERE 1=1"""
+    pparams = []
+    if project_id: pq += " AND o.project_id=?"; pparams.append(project_id)
+    photos = db.execute(pq, pparams).fetchall()
+    db.close()
+
+    UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        # — Сводки: один CSV файл
+        csv_buf = io.StringIO()
+        writer = csv.writer(csv_buf, delimiter=';')
+        writer.writerow(['Проект','Объект','Дата','Инженер','Статус','Дата сдачи','ID сводки'])
+        for r in reports:
+            status = 'Сдана' if r['status'] == 'submitted' else 'Черновик'
+            writer.writerow([r['project_name'], r['object_name'], r['report_date'],
+                             r['engineer'], status, r['submitted_at'] or '', r['id']])
+        zf.writestr('Сводки/сводки.csv', '﻿' + csv_buf.getvalue())  # BOM для Excel
+
+        # — Детальные текстовые сводки
+        for r in reports:
+            proj = (r['project_name'] or 'Без_проекта').replace('/', '-')
+            fname = f"Сводки/{proj}/{r['report_date']}_{r['engineer'].split()[0]}_id{r['id']}.txt"
+            content = f"Сводка #{r['id']}\n"
+            content += f"Дата: {r['report_date']}\n"
+            content += f"Инженер: {r['engineer']}\n"
+            content += f"Объект: {r['object_name']}\n"
+            content += f"Проект: {r['project_name']}\n"
+            content += f"Статус: {'Сдана' if r['status']=='submitted' else 'Черновик'}\n"
+            if r['submitted_at']: content += f"Дата сдачи: {r['submitted_at']}\n"
+            zf.writestr(fname, content)
+
+        # — Фото: по папкам проект/дата
+        for ph in photos:
+            proj = (ph['project_name'] or 'Без_проекта').replace('/', '-')
+            src = os.path.join(UPLOAD_FOLDER, ph['file_path'])
+            if os.path.exists(src):
+                ext = os.path.splitext(ph['file_path'])[1] or '.jpg'
+                cap = (ph['caption'] or '').replace('/', '-')[:30]
+                zname = f"Фотографии/{proj}/{ph['report_date']}/{ph['engineer'].split()[0]}_{cap}{ext}"
+                zf.write(src, zname)
+
+    buf.seek(0)
+    date_str = datetime.now().strftime('%Y%m%d_%H%M')
+    proj_suffix = f"_project{project_id}" if project_id else ""
+    fname = f"sk_export{proj_suffix}_{date_str}.zip"
+    return send_file(buf, as_attachment=True, download_name=fname, mimetype='application/zip')
 
 # ─────────────────────────────────────────────────────────
 # ФОТО — управление (Админ: все + удаление; Инженер: свои)
