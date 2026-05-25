@@ -1101,6 +1101,32 @@ def migrate_v2():
         db.close(); return err(str(e))
 
 
+# ─────────────────────────────────────────────────────────
+# РЕЗЕРВНАЯ КОПИЯ БД (только для администратора)
+# ─────────────────────────────────────────────────────────
+
+@app.get('/api/admin/backup_db')
+def backup_db():
+    from db.schema import DB_PATH
+    from flask import send_file
+    import shutil, tempfile
+    from datetime import datetime
+    user_id = request.args.get('user_id')
+    # Проверяем что запрашивает администратор
+    db = get_db()
+    user = db.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
+    db.close()
+    if not user or user['role'] != 'admin':
+        return err('Доступ запрещён', 403)
+    # Копируем БД во временный файл чтобы не блокировать основную
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.db')
+    shutil.copy2(DB_PATH, tmp.name)
+    tmp.close()
+    date_str = datetime.now().strftime('%Y%m%d_%H%M')
+    return send_file(tmp.name, as_attachment=True,
+                     download_name=f'sk_pilot_backup_{date_str}.db',
+                     mimetype='application/octet-stream')
+
 
 if __name__ == '__main__':
     init_db()
