@@ -2,7 +2,7 @@
 # Создан: Vlad Nikonenko & Claude (Anthropic)
 # https://sk-pilot.onrender.com
 
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, send_file
 from flask_cors import CORS
 import os, sys, hashlib, uuid
 from datetime import datetime, date
@@ -1107,10 +1107,8 @@ def migrate_v2():
 
 @app.get('/api/admin/backup_db')
 def backup_db():
-    from db.schema import DB_PATH
-    from flask import send_file
     import shutil, tempfile
-    from datetime import datetime
+    from db.schema import DB_PATH
     user_id = request.args.get('user_id')
     # Проверяем что запрашивает администратор
     db = get_db()
