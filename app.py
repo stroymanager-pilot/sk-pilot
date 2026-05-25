@@ -64,6 +64,7 @@ def auto_migrate():
         ("ALTER TABLE ks2_check ADD COLUMN contractor_name TEXT", "ks2_check.contractor_name"),
         ("ALTER TABLE ks2_check ADD COLUMN engineer_id INTEGER", "ks2_check.engineer_id"),
         ("ALTER TABLE meetings ADD COLUMN protocol_path TEXT", "meetings.protocol_path2"),
+        ("ALTER TABLE users ADD COLUMN is_active INTEGER DEFAULT 1", "users.is_active"),
     ]
     for sql, label in migrations:
         try:
@@ -239,9 +240,22 @@ def update_contractor(c_id):
 @app.get('/api/users')
 def list_users():
     db = get_db()
-    rows = db.execute("SELECT id, full_name, email, role, tj_user_id FROM users ORDER BY full_name").fetchall()
+    rows = db.execute("SELECT id, full_name, email, role, tj_user_id, COALESCE(is_active,1) as is_active FROM users ORDER BY full_name").fetchall()
     db.close()
     return ok(rows_to_list(rows))
+
+@app.patch('/api/users/<int:user_id>')
+def update_user(user_id):
+    d = request.json or {}
+    db = get_db()
+    allowed = ['full_name', 'email', 'role', 'is_active']
+    updates = {k: v for k, v in d.items() if k in allowed}
+    if updates:
+        sql = ', '.join(f"{k}=?" for k in updates)
+        db.execute(f"UPDATE users SET {sql} WHERE id=?", list(updates.values()) + [user_id])
+        db.commit()
+    db.close()
+    return ok()
 
 @app.post('/api/users')
 def create_user():
