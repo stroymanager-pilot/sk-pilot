@@ -66,6 +66,9 @@ def auto_migrate():
         ("ALTER TABLE meetings ADD COLUMN protocol_path TEXT", "meetings.protocol_path2"),
         ("ALTER TABLE users ADD COLUMN is_active INTEGER DEFAULT 1", "users.is_active"),
         ("ALTER TABLE partners ADD COLUMN project_id INTEGER", "partners.project_id"),
+        ("ALTER TABLE operational_control ADD COLUMN contractor_id INTEGER", "operational_control.contractor_id"),
+        ("ALTER TABLE acceptance_control ADD COLUMN contractor_id INTEGER", "acceptance_control.contractor_id"),
+        ("ALTER TABLE input_control ADD COLUMN contractor_id INTEGER", "input_control.contractor_id"),
     ]
     for sql, label in migrations:
         try:
@@ -376,9 +379,9 @@ def get_report(report_id):
         ORDER BY c.name
     """, (report_id,)).fetchall())
     r['input_control'] = rows_to_list(db.execute(
-        "SELECT ic.*, s.name as section_name FROM input_control ic LEFT JOIN sections s ON s.id=ic.section_id WHERE ic.report_id=?", (report_id,)).fetchall())
+        "SELECT ic.*, s.name as section_name, c.name as contractor_name FROM input_control ic LEFT JOIN sections s ON s.id=ic.section_id LEFT JOIN contractors c ON c.id=ic.contractor_id WHERE ic.report_id=?", (report_id,)).fetchall())
     r['operational_control'] = rows_to_list(db.execute(
-        "SELECT oc.*, s.name as section_name FROM operational_control oc LEFT JOIN sections s ON s.id=oc.section_id WHERE oc.report_id=?", (report_id,)).fetchall())
+        "SELECT oc.*, s.name as section_name, c.name as contractor_name FROM operational_control oc LEFT JOIN sections s ON s.id=oc.section_id LEFT JOIN contractors c ON c.id=oc.contractor_id WHERE oc.report_id=?", (report_id,)).fetchall())
     r['verbal_remarks'] = rows_to_list(db.execute(
         "SELECT vr.*, s.name as section_name, u.full_name as issued_by_name FROM verbal_remarks vr LEFT JOIN sections s ON s.id=vr.section_id LEFT JOIN users u ON u.id=vr.issued_by WHERE vr.report_id=?", (report_id,)).fetchall())
     r['prescriptions_log'] = rows_to_list(db.execute(
@@ -388,7 +391,7 @@ def get_report(report_id):
     r['photos'] = rows_to_list(db.execute(
         "SELECT * FROM photos WHERE report_id=? ORDER BY sort_order", (report_id,)).fetchall())
     r['acceptance_control'] = rows_to_list(db.execute(
-        "SELECT ac.*, s.name as section_name FROM acceptance_control ac LEFT JOIN sections s ON s.id=ac.section_id WHERE ac.report_id=?", (report_id,)).fetchall())
+        "SELECT ac.*, s.name as section_name, c.name as contractor_name FROM acceptance_control ac LEFT JOIN sections s ON s.id=ac.section_id LEFT JOIN contractors c ON c.id=ac.contractor_id WHERE ac.report_id=?", (report_id,)).fetchall())
     r['ks2_check'] = rows_to_list(db.execute(
         "SELECT * FROM ks2_check WHERE report_id=?", (report_id,)).fetchall())
     db.close()
@@ -441,11 +444,11 @@ def add_input_control(report_id):
     d = request.json or {}
     db = get_db()
     cur = db.execute(
-        "INSERT INTO input_control (report_id, material_name, quantity, document_name, section_id, deviation_note, engineer_id) VALUES (?,?,?,?,?,?,?)",
-        (report_id, d.get('material_name'), d.get('quantity'), d.get('document_name'), d.get('section_id'), d.get('deviation_note'), d.get('engineer_id'))
+        "INSERT INTO input_control (report_id, material_name, quantity, document_name, section_id, deviation_note, engineer_id, contractor_id) VALUES (?,?,?,?,?,?,?,?)",
+        (report_id, d.get('material_name'), d.get('quantity'), d.get('document_name'), d.get('section_id'), d.get('deviation_note'), d.get('engineer_id'), d.get('contractor_id'))
     )
     db.commit()
-    row = db.execute("SELECT * FROM input_control WHERE id=?", (cur.lastrowid,)).fetchone()
+    row = db.execute("SELECT ic.*, s.name as section_name, c.name as contractor_name FROM input_control ic LEFT JOIN sections s ON s.id=ic.section_id LEFT JOIN contractors c ON c.id=ic.contractor_id WHERE ic.id=?", (cur.lastrowid,)).fetchone()
     db.close()
     return ok(dict(row)), 201
 
@@ -522,11 +525,11 @@ def add_operational_control(report_id):
     d = request.json or {}
     db = get_db()
     cur = db.execute(
-        "INSERT INTO operational_control (report_id, section_id, work_stage, controlled_operations, control_method, status, deviation_note, engineer_id) VALUES (?,?,?,?,?,?,?,?)",
-        (report_id, d.get('section_id'), d.get('work_stage'), d.get('controlled_operations'), d.get('control_method'), d.get('status',''), d.get('deviation_note',''), d.get('engineer_id'))
+        "INSERT INTO operational_control (report_id, section_id, work_stage, controlled_operations, control_method, status, deviation_note, engineer_id, contractor_id) VALUES (?,?,?,?,?,?,?,?,?)",
+        (report_id, d.get('section_id'), d.get('work_stage'), d.get('controlled_operations'), d.get('control_method'), d.get('status',''), d.get('deviation_note',''), d.get('engineer_id'), d.get('contractor_id'))
     )
     db.commit()
-    row = db.execute("SELECT * FROM operational_control WHERE id=?", (cur.lastrowid,)).fetchone()
+    row = db.execute("SELECT oc.*, s.name as section_name, c.name as contractor_name FROM operational_control oc LEFT JOIN sections s ON s.id=oc.section_id LEFT JOIN contractors c ON c.id=oc.contractor_id WHERE oc.id=?", (cur.lastrowid,)).fetchone()
     db.close()
     return ok(dict(row)), 201
 
@@ -705,11 +708,11 @@ def add_acceptance_control(report_id):
     d = request.json or {}
     db = get_db()
     cur = db.execute(
-        "INSERT INTO acceptance_control (report_id, section_id, work_stage, controlled_operations, control_method, status, deviation_note, engineer_id) VALUES (?,?,?,?,?,?,?,?)",
-        (report_id, d.get('section_id'), d.get('work_stage'), d.get('controlled_operations'), d.get('control_method'), d.get('status',''), d.get('deviation_note',''), d.get('engineer_id'))
+        "INSERT INTO acceptance_control (report_id, section_id, work_stage, controlled_operations, control_method, status, deviation_note, engineer_id, contractor_id) VALUES (?,?,?,?,?,?,?,?,?)",
+        (report_id, d.get('section_id'), d.get('work_stage'), d.get('controlled_operations'), d.get('control_method'), d.get('status',''), d.get('deviation_note',''), d.get('engineer_id'), d.get('contractor_id'))
     )
     db.commit()
-    row = db.execute("SELECT * FROM acceptance_control WHERE id=?", (cur.lastrowid,)).fetchone()
+    row = db.execute("SELECT ac.*, s.name as section_name, c.name as contractor_name FROM acceptance_control ac LEFT JOIN sections s ON s.id=ac.section_id LEFT JOIN contractors c ON c.id=ac.contractor_id WHERE ac.id=?", (cur.lastrowid,)).fetchone()
     db.close()
     return ok(dict(row)), 201
 

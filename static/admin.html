@@ -95,6 +95,15 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 .photo-admin-meta{font-size:10px;color:var(--text3);margin-top:2px;}
 .photo-admin-del{width:100%;margin-top:6px;padding:4px;background:var(--red-pale);border:none;border-radius:4px;color:var(--red);font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);}
 .photo-admin-del:hover{background:var(--red);color:#fff;}
+.photo-admin img{cursor:zoom-in;}
+/* LIGHTBOX */
+#lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:14px;}
+#lightbox.open{display:flex;}
+#lightbox img{max-width:92vw;max-height:80vh;border-radius:8px;box-shadow:0 8px 40px rgba(0,0,0,.6);object-fit:contain;}
+#lightbox .lb-caption{color:#fff;font-size:14px;font-weight:600;max-width:80vw;text-align:center;}
+#lightbox .lb-meta{color:rgba(255,255,255,.6);font-size:12px;text-align:center;}
+#lightbox .lb-close{position:fixed;top:18px;right:22px;color:#fff;font-size:28px;cursor:pointer;line-height:1;opacity:.8;}
+#lightbox .lb-close:hover{opacity:1;}
 /* TOAST */
 .toast{position:fixed;top:20px;right:20px;background:var(--navy);color:#fff;padding:10px 18px;border-radius:var(--r-sm);font-size:13px;font-weight:600;z-index:999;opacity:0;transform:translateY(-8px);transition:all .2s;pointer-events:none;box-shadow:0 4px 16px rgba(0,0,0,.2);}
 .toast.show{opacity:1;transform:translateY(0);}
@@ -961,7 +970,7 @@ async function openReport(id, date, engineer) {
       </div>`).join('')):''}
     ${photos.length?section(`📷 Фото (${photos.length})`, `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
       ${photos.map(p=>`<div style="border-radius:6px;overflow:hidden;border:1px solid var(--border)">
-        <img src="${API}/uploads/${p.file_path}" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block">
+        <img src="${API}/uploads/${p.file_path}" data-lb="1" data-cap="${(p.caption||'').replace(/"/g,'&quot;')}" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block;cursor:zoom-in">
         ${p.caption?`<div style="padding:4px 6px;font-size:11px;color:var(--text3)">${p.caption}</div>`:''}
       </div>`).join('')}
     </div>`):''}`;
@@ -998,7 +1007,10 @@ async function loadAllPhotos() {
   empty.style.display='none';
   grid.innerHTML = photos.map(p=>`
     <div class="photo-admin" id="ph-${p.id}">
-      <img src="${API}/uploads/${p.file_path}" alt="" onerror="this.parentNode.style.display='none'">
+      <img src="${API}/uploads/${p.file_path}" data-lb="1"
+        data-cap="${(p.caption||'Без подписи').replace(/"/g,'&quot;')}"
+        data-meta="${((p.engineer_name||'—')+' · '+(p.report_date||'—')+' · '+(p.object_name||'—')).replace(/"/g,'&quot;')}"
+        alt="" onerror="this.parentNode.style.display='none'">
       <div class="photo-admin-info">
         <div class="photo-admin-cap">${p.caption||'Без подписи'}</div>
         <div class="photo-admin-meta">${p.engineer_name||'—'} · ${p.report_date||'—'}</div>
@@ -1018,9 +1030,34 @@ async function deletePhoto(id) {
   toast('Фото удалено','ok');
 }
 
+function openLightbox(src, caption, meta) {
+  const lb = document.getElementById('lightbox');
+  document.getElementById('lbImg').src = src;
+  document.getElementById('lbCaption').textContent = caption || '';
+  document.getElementById('lbMeta').textContent = meta || '';
+  lb.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeLightbox(e) {
+  if (e && e.target === document.getElementById('lbImg')) return; // don't close when clicking the image
+  document.getElementById('lightbox').classList.remove('open');
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+document.addEventListener('click', e => {
+  const img = e.target.closest('img[data-lb]');
+  if (img) openLightbox(img.src, img.dataset.cap, img.dataset.meta||'');
+});
+
 // ── START ──
 init();
 </script>
 <!-- Создан: Vlad Nikonenko & Claude (Anthropic) -->
+<div id="lightbox" onclick="closeLightbox(event)">
+  <span class="lb-close" onclick="closeLightbox()">✕</span>
+  <img id="lbImg" src="" alt="">
+  <div class="lb-caption" id="lbCaption"></div>
+  <div class="lb-meta" id="lbMeta"></div>
+</div>
 </body>
 </html>

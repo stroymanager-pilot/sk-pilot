@@ -591,6 +591,11 @@ function renderInput() {
           <div><label class="fl no-mt">Количество</label><input id="icQty" placeholder="15 м³" style="font-size:14px"></div>
           <div><label class="fl no-mt">Участок</label><select id="icSec">${sectionOpts()}</select></div>
         </div>
+        <label class="fl">Подрядчик</label>
+        <select id="icCon" style="font-size:14px">
+          <option value="">— выберите подрядчика —</option>
+          ${(S.contractors||[]).filter(c=>c.is_active).map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}
+        </select>
         <label class="fl">Наименование сопроводительного документа</label>
         <textarea id="icDoc" placeholder="Паспорт качества № 123; Журнал верификации № 1..." style="min-height:52px;resize:vertical;font-size:14px;width:100%"></textarea>
         <div class="row2">
@@ -613,7 +618,7 @@ function renderInput() {
             <div>
               <div style="font-size:14px;font-weight:600">${esc(ic.material_name)}</div>
               <div style="font-size:12px;color:var(--text3)">${esc(ic.quantity)||'—'} · ${esc(ic.document_name)||'—'}</div>
-              <div style="font-size:12px;color:var(--text3);margin-top:1px">${esc(ic.section_name)||''}</div>
+              <div style="font-size:12px;color:var(--text3);margin-top:1px">${esc(ic.section_name)||''}${ic.contractor_name?` · 🏗 ${esc(ic.contractor_name)}`:''}</div>
               ${ic.deviation_note?`<div style="font-size:12px;color:var(--red);margin-top:2px">⚠ ${esc(ic.deviation_note)}</div>`:`<div style="font-size:12px;color:var(--green);margin-top:2px">✓ Норма</div>`}
             </div>
             ${!S.isReadonly?`<button class="p-rm" onclick="deleteIC(${ic.id})">✕</button>`:''}
@@ -631,6 +636,7 @@ async function saveIC() {
     body:JSON.stringify({material_name:mat,quantity:document.getElementById('icQty').value,
       document_name:document.getElementById('icDoc').value,
       section_id:document.getElementById('icSec')?.value||null,
+      contractor_id:document.getElementById('icCon')?.value||null,
       deviation_note:document.getElementById('icStatus').value?document.getElementById('icDev').value:'',
       engineer_id:userId})}).then(r=>r.json());
   S.inputControl.push(r.data); setSaving(false); toast('Добавлено','ok'); showStep(currentStep);
@@ -658,6 +664,11 @@ function renderOCsection(title, ico, items, addFn, delFn, stageId, opsId, method
           <div><label class="fl no-mt">Метод контроля</label><textarea id="${methodId}" style="min-height:60px;resize:vertical"></textarea></div>
         </div>
         <label class="fl">Участок</label><select id="${secId}">${sectionOpts(S.allSections[0]?.id)}</select>
+        <label class="fl">Подрядчик</label>
+        <select id="${stageId}Con" style="font-size:14px">
+          <option value="">— выберите подрядчика —</option>
+          ${(S.contractors||[]).filter(c=>c.is_active).map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}
+        </select>
         <div class="row2" style="margin-top:10px">
           <div><label class="fl no-mt">Статус</label>
             <select id="${secId}_status" onchange="document.getElementById('${secId}_devrow').style.display=this.value?'block':'none'">
@@ -683,6 +694,7 @@ function renderOCsection(title, ico, items, addFn, delFn, stageId, opsId, method
             <div style="font-size:14px;font-weight:600">${esc(o.work_stage)} <span style="font-size:12px;color:var(--text3);font-weight:400">${esc(o.section_name)||''}</span></div>
             ${!S.isReadonly?`<button class="p-rm" onclick="${delFn}(${o.id})">✕</button>`:''}
           </div>
+          ${o.contractor_name?`<div style="font-size:12px;color:var(--text3);margin-top:2px">🏗 ${esc(o.contractor_name)}</div>`:''}
           <div style="font-size:12px;color:var(--text3);margin-top:3px">Операции: ${esc(o.controlled_operations)||'—'}<br>Метод: ${esc(o.control_method)||'—'}</div>
           ${o.deviation_note?`<div style="font-size:12px;color:var(--red);margin-top:3px">⚠ ${esc(o.deviation_note)}</div>`:(o.status?'':`<div style="font-size:12px;color:var(--green);margin-top:3px">✓ Норма</div>`)}
         </div>`).join(''):'<div class="empty">Нет записей</div>'}
@@ -706,6 +718,7 @@ async function saveOC() {
   await fetch(`${API}/api/reports/${S.reportId}/operational_control`,{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({work_stage:stage,controlled_operations:document.getElementById('ocOps').value,
       control_method:document.getElementById('ocMethod').value,section_id:document.getElementById('ocSec').value,
+      contractor_id:document.getElementById('ocStageCon')?.value||null,
       status:ocStatusEl?.value||'',deviation_note:ocStatusEl?.value&&ocDevEl?ocDevEl.value:'',
       engineer_id:userId})});
   const r=await fetch(`${API}/api/reports/${S.reportId}`).then(r=>r.json());
@@ -728,6 +741,7 @@ async function saveAC() {
   const r=await fetch(`${API}/api/reports/${S.reportId}/acceptance_control`,{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({work_stage:stage,controlled_operations:document.getElementById('acOps').value,
       control_method:document.getElementById('acMethod').value,section_id:document.getElementById('acSec').value,
+      contractor_id:document.getElementById('acStageCon')?.value||null,
       status:acStatusEl?.value||'',deviation_note:acStatusEl?.value&&acDevEl?acDevEl.value:'',
       engineer_id:userId})}).then(r=>r.json());
   S.acceptanceControl.push(r.data); setSaving(false); toast('Сохранено','ok'); showStep(currentStep);
