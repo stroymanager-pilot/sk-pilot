@@ -1341,6 +1341,20 @@ async function openPastReport(id, date) {
 // ── SUBMIT ──
 async function submitReport() {
   if(S.isReadonly){toast('Сводка уже сдана','ok');return;}
+
+  // Валидация: минимальный состав сводки
+  const hasPersonnel = S.personnel.some(p=>p.headcount>0) || window._prows?.some(r=>parseInt(r.headcount)>0);
+  const hasIC = S.inputControl.length > 0;
+  const hasOC = (S.report?.operational_control||[]).length > 0;
+  const hasAC = S.acceptanceControl.length > 0;
+  const hasKS2 = S.ks2Check.length > 0;
+  const hasPhotos = S.photos.length > 0;
+
+  if (!hasPersonnel && !hasIC && !hasOC && !hasAC && !hasKS2 && !hasPhotos) {
+    toast('Сводка пустая — заполните хотя бы один раздел', 'err');
+    return;
+  }
+
   if(!confirm('Сдать сводку? После сдачи редактирование будет закрыто.'))return;
   setSaving(true);
   await fetch(`${API}/api/reports/${S.reportId}/submit`,{method:'POST'});

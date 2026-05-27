@@ -236,7 +236,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
       <input type="hidden" id="editProjectId">
       <div class="form-row"><label class="fl">Название проекта</label><input id="projName" placeholder="ЖК «Окла»"></div>
       <div class="form-row"><label class="fl">Описание</label><textarea id="projDesc" placeholder="Жилой комплекс..."></textarea></div>
-      <div class="form-row"><label class="fl">ID в TeamJect</label><input id="projTj" placeholder="Для интеграции"></div>
+      <div class="form-row"><label class="fl">ID в TeamJect <span style="font-weight:400;color:var(--text3);text-transform:none;letter-spacing:0">(необязательно)</span></label><input id="projTj" placeholder="Оставьте пустым — поле для будущей интеграции с TeamJect"><div style="font-size:11px;color:var(--text3);margin-top:4px">TeamJect — система управления замечаниями и предписаниями. ID нужен только если ваш объект уже ведётся там.</div></div>
       <div id="projObjectsSection" style="margin-top:16px;display:none">
         <strong style="font-size:13px">Объекты в проекте:</strong>
         <div id="projObjectsList" style="margin:10px 0"></div>
@@ -425,6 +425,14 @@ async function init() {
     if (fesel) state.users.filter(u=>u.role!=='admin' && u.is_active!==0).forEach(u => {
       const o = document.createElement('option'); o.value=u.id; o.textContent=u.full_name; fesel.appendChild(o);
     });
+
+    // Заполняем filterProject сразу в init() — избегаем race condition при открытии вкладки
+    const fpEl = document.getElementById('filterProject');
+    if (fpEl && fpEl.options.length <= 1) {
+      state.projects.forEach(p => {
+        const opt = document.createElement('option'); opt.value=p.id; opt.textContent=p.name; fpEl.appendChild(opt);
+      });
+    }
 
     // Fill engineer object select
     const eosel = document.getElementById('engObject');
@@ -847,17 +855,6 @@ async function saveEngineer() {
 
 // ── ВСЕ СВОДКИ ──
 async function loadAllReports() {
-  // Populate project filter (always check, state.projects may be cached from another tab)
-  const fpEl = document.getElementById('filterProject');
-  if (fpEl && fpEl.options.length <= 1) {
-    if (state.projects.length === 0) {
-      const res = await fetch(`${API}/api/projects`).then(r=>r.json()).catch(()=>({data:[]}));
-      state.projects = res.data || [];
-    }
-    state.projects.forEach(p => {
-      const opt = document.createElement('option'); opt.value=p.id; opt.textContent=p.name; fpEl.appendChild(opt);
-    });
-  }
   const projId = document.getElementById('filterProject').value;
   const userId = document.getElementById('filterEngineer').value;
   let url = `${API}/api/all_reports?`;
@@ -1019,7 +1016,8 @@ async function loadAllPhotos() {
         <div class="photo-admin-meta">${p.engineer_name||'—'} · ${p.report_date||'—'}</div>
         <div class="photo-admin-meta">${p.object_name||'—'}</div>
         <div style="display:flex;gap:4px;margin-top:6px">
-          <a href="${API}/uploads/${p.file_path}" download class="btn btn-ghost btn-xs" style="text-decoration:none;flex:1;justify-content:center">⬇ Скачать</a>
+          <button class="btn btn-ghost btn-xs" style="flex:1;justify-content:center" onclick="openReport(${p.report_id})">📋 Сводка</button>
+          <a href="${API}/uploads/${p.file_path}" download class="btn btn-ghost btn-xs" style="text-decoration:none;justify-content:center">⬇</a>
           <button class="btn btn-danger btn-xs" onclick="deletePhoto(${p.id})">✕</button>
         </div>
       </div>
