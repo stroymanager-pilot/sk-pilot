@@ -1138,9 +1138,36 @@ def export_zip():
     db.close()
 
     UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
+
+    # Загружаем детали каждой сводки (контроль, персонал, замечания)
+    report_details = {}
+    for r in reports:
+        try:
+            det = get_db()
+            ic  = det.execute("SELECT ic.*, s.name as section_name, c.name as contractor_name FROM input_control ic LEFT JOIN sections s ON s.id=ic.section_id LEFT JOIN contractors c ON c.id=ic.contractor_id WHERE ic.report_id=?", (r['id'],)).fetchall()
+            oc  = det.execute("SELECT oc.*, s.name as section_name, c.name as contractor_name FROM operational_control oc LEFT JOIN sections s ON s.id=oc.section_id LEFT JOIN contractors c ON c.id=oc.contractor_id WHERE oc.report_id=?", (r['id'],)).fetchall()
+            ac  = det.execute("SELECT ac.*, s.name as section_name, c.name as contractor_name FROM acceptance_control ac LEFT JOIN sections s ON s.id=ac.section_id LEFT JOIN contractors c ON c.id=ac.contractor_id WHERE ac.report_id=?", (r['id'],)).fetchall()
+            pe  = det.execute("SELECT pe.*, c.name as contractor_name FROM personnel_entries pe LEFT JOIN contractors c ON c.id=pe.contractor_id WHERE pe.report_id=? AND pe.headcount>0", (r['id'],)).fetchall()
+            rem = det.execute("SELECT * FROM verbal_remarks WHERE report_id=?", (r['id'],)).fetchall()
+            ks2 = det.execute("SELECT * FROM ks2_check WHERE report_id=?", (r['id'],)).fetchall()
+            det.close()
+            report_details[r['id']] = {'ic': ic, 'oc': oc, 'ac': ac, 'pe': pe, 'rem': rem, 'ks2': ks2}
+        except Exception:
+            report_details[r['id']] = {}
+
+    def safe_path(s):
+        return (s or '').replace('/', '-').replace('\\', '-').replace(':', '').strip()
+
+    def eng_folder(full_name):
+        # "Глуховской Александр Константинович" → "Глуховской АК"
+        parts = (full_name or '').split()
+        if len(parts) >= 3:
+            return f"{parts[0]} {parts[1][0]}.{parts[2][0]}."
+        return parts[0] if parts else full_name
+
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
-        # — Сводки: один CSV файл
+        # — Сводки: сводный CSV (все инженеры)
         csv_buf = io.StringIO()
         writer = csv.writer(csv_buf, delimiter=';')
         writer.writerow(['Проект','Объект','Дата','Инженер','Статус','Дата сдачи','ID сводки'])
@@ -1150,28 +1177,104 @@ def export_zip():
                              r['engineer'], status, r['submitted_at'] or '', r['id']])
         zf.writestr('Сводки/сводки.csv', '﻿' + csv_buf.getvalue())  # BOM для Excel
 
-        # — Детальные текстовые сводки
+        # — Детальные TXT: Сводки/{Проект}/{Инженер}/{дата}_id{N}.txt
         for r in reports:
-            proj = (r['project_name'] or 'Без_проекта').replace('/', '-')
-            fname = f"Сводки/{proj}/{r['report_date']}_{r['engineer'].split()[0]}_id{r['id']}.txt"
-            content = f"Сводка #{r['id']}\n"
-            content += f"Дата: {r['report_date']}\n"
-            content += f"Инженер: {r['engineer']}\n"
-            content += f"Объект: {r['object_name']}\n"
-            content += f"Проект: {r['project_name']}\n"
-            content += f"Статус: {'Сдана' if r['status']=='submitted' else 'Черновик'}\n"
-            if r['submitted_at']: content += f"Дата сдачи: {r['submitted_at']}\n"
-            zf.writestr(fname, content)
+            proj  = safe_path(r['project_name'] or 'Без_проекта')
+            eng   = safe_path(eng_folder(r['engineer']))
+            fname = f"Сводки/{proj}/{eng}/{r['report_date']}_id{r['id']}.txt"
 
-        # — Фото: по папкам проект/дата
+            sep = '=' * 54
+            lines = [sep,
+                     f"  СВОДКА #{r['id']}  ·  {r['report_date']}",
+                     sep,
+                     f"Инженер : {r['engineer']}",
+                     f"Объект  : {r['object_name']}",
+                     f"Проект  : {r['project_name'] or '—'}",
+                     f"Статус  : {'Сдана' if r['status'] == 'submitted' else 'Черновик'}"]
+            if r['submitted_at']:
+                lines.append(f"Сдана   : {r['submitted_at'][:16]}")
+            lines.append('')
+
+            det = report_details.get(r['id'], {})
+
+            if det.get('pe'):
+                lines.append('── ПЕРСОНАЛ ' + '─' * 42)
+                for p in det['pe']:
+                    lines.append(f"  {p['contractor_name'] or '—'}  ·  {p['headcount']} чел.  ·  {p['work_description'] or ''}")
+                lines.append('')
+
+            if det.get('ic'):
+                lines.append('── ВХОДНОЙ КОНТРОЛЬ ' + '─' * 34)
+                for ic in det['ic']:
+                    status_ic = f"ОТКЛОНЕНИЕ: {ic['deviation_note']}" if ic.get('deviation_note') else 'Норма'
+                    lines.append(f"  {ic['material_name'] or '—'}")
+                    lines.append(f"    Кол-во: {ic['quantity'] or '—'}  ·  Документ: {ic['document_name'] or '—'}")
+                    if ic.get('contractor_name'):
+                        lines.append(f"    Подрядчик: {ic['contractor_name']}")
+                    lines.append(f"    [{status_ic}]")
+                lines.append('')
+
+            if det.get('oc'):
+                lines.append('── ОПЕРАЦИОННЫЙ КОНТРОЛЬ ' + '─' * 29)
+                for oc in det['oc']:
+                    lines.append(f"  {oc['work_stage'] or '—'}  [{oc['section_name'] or ''}]")
+                    if oc.get('contractor_name'):
+                        lines.append(f"    Подрядчик: {oc['contractor_name']}")
+                    lines.append(f"    Операции: {oc['controlled_operations'] or '—'}")
+                    lines.append(f"    Метод: {oc['control_method'] or '—'}")
+                    if oc.get('deviation_note'):
+                        lines.append(f"    ОТКЛОНЕНИЕ: {oc['deviation_note']}")
+                lines.append('')
+
+            if det.get('ac'):
+                lines.append('── ПРИЁМОЧНЫЙ КОНТРОЛЬ ' + '─' * 31)
+                for ac in det['ac']:
+                    lines.append(f"  {ac['work_stage'] or '—'}  [{ac['section_name'] or ''}]")
+                    if ac.get('contractor_name'):
+                        lines.append(f"    Подрядчик: {ac['contractor_name']}")
+                    if ac.get('deviation_note'):
+                        lines.append(f"    ОТКЛОНЕНИЕ: {ac['deviation_note']}")
+                lines.append('')
+
+            if det.get('rem'):
+                open_r  = [x for x in det['rem'] if x['status'] == 'open']
+                close_r = [x for x in det['rem'] if x['status'] != 'open']
+                lines.append(f"── ЗАМЕЧАНИЯ ({len(open_r)} открытых / {len(close_r)} закрытых) " + '─' * 20)
+                for rm in det['rem']:
+                    mark = '[ОТКРЫТО]' if rm['status'] == 'open' else '[ЗАКРЫТО]'
+                    lines.append(f"  {mark} {rm['description']}")
+                    if rm.get('deadline'):
+                        lines.append(f"    Срок: {rm['deadline']}")
+                lines.append('')
+
+            if det.get('ks2'):
+                lines.append('── ИД / КС-2 ' + '─' * 41)
+                for k in det['ks2']:
+                    ks6a = 'есть' if k['has_ks6a'] else 'нет'
+                    idd  = 'есть' if k['has_id']   else 'нет'
+                    lines.append(f"  {k['contractor_name'] or '—'}")
+                    lines.append(f"    КС-2: {k['ks2_number'] or '—'}  ·  КС-6а: {ks6a}  ·  ИД: {idd}")
+                lines.append('')
+
+            zf.writestr(fname, '\n'.join(lines))
+
+        # — Фото: Фотографии/{Проект}/{Инженер}/{дата}/{N:02}_{подпись}{ext}
+        from collections import defaultdict
+        photo_counters = defaultdict(int)
         for ph in photos:
-            proj = (ph['project_name'] or 'Без_проекта').replace('/', '-')
-            src = os.path.join(UPLOAD_FOLDER, ph['file_path'])
-            if os.path.exists(src):
-                ext = os.path.splitext(ph['file_path'])[1] or '.jpg'
-                cap = (ph['caption'] or '').replace('/', '-')[:30]
-                zname = f"Фотографии/{proj}/{ph['report_date']}/{ph['engineer'].split()[0]}_{cap}{ext}"
-                zf.write(src, zname)
+            proj  = safe_path(ph['project_name'] or 'Без_проекта')
+            eng   = safe_path(eng_folder(ph['engineer']))
+            src   = os.path.join(UPLOAD_FOLDER, ph['file_path'])
+            if not os.path.exists(src):
+                continue
+            ext = os.path.splitext(ph['file_path'])[1] or '.jpg'
+            day_key = (proj, eng, ph['report_date'])
+            photo_counters[day_key] += 1
+            n   = photo_counters[day_key]
+            cap = safe_path(ph['caption'] or '')[:40]
+            cap_part = f"_{cap}" if cap else ''
+            zname = f"Фотографии/{proj}/{eng}/{ph['report_date']}/{n:02d}{cap_part}{ext}"
+            zf.write(src, zname)
 
     buf.seek(0)
     date_str = datetime.now().strftime('%Y%m%d_%H%M')
