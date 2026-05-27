@@ -683,6 +683,27 @@ def delete_photo(photo_id):
 def serve_upload(filename):
     return send_from_directory(UPLOAD_FOLDER, filename)
 
+@app.get('/api/admin/photo_check')
+def photo_check():
+    """Диагностика: проверяем какие фото есть в БД и существуют ли файлы на диске"""
+    db = get_db()
+    rows = db.execute("""
+        SELECT ph.id, ph.file_path, ph.caption, dr.report_date,
+               u.full_name as engineer, o.name as object_name
+        FROM photos ph
+        JOIN daily_reports dr ON dr.id=ph.report_id
+        JOIN users u ON u.id=dr.user_id
+        JOIN objects o ON o.id=dr.object_id
+        ORDER BY ph.id
+    """).fetchall()
+    result = []
+    for r in rows:
+        fpath = os.path.join(UPLOAD_FOLDER, r['file_path']) if r['file_path'] else None
+        exists = os.path.isfile(fpath) if fpath else False
+        result.append({**dict(r), 'file_exists': exists, 'upload_folder': UPLOAD_FOLDER})
+    db.close()
+    return ok(result)
+
 # ─────────────────────────────────────────────────────────
 # ОТКРЫТЫЕ ЗАМЕЧАНИЯ по объекту (для руководителя)
 # ─────────────────────────────────────────────────────────
@@ -1024,13 +1045,17 @@ def my_reports():
     user_id = request.args.get('user_id')
     if not user_id: return err('user_id обязателен')
     db = get_db()
+    # Только сводки по объектам, на которые инженер сейчас назначен
     rows = db.execute("""
         SELECT dr.*, o.name as object_name
         FROM daily_reports dr
         JOIN objects o ON o.id=dr.object_id
         WHERE dr.user_id=?
+          AND dr.object_id IN (
+              SELECT object_id FROM object_users WHERE user_id=?
+          )
         ORDER BY dr.report_date DESC
-    """, (user_id,)).fetchall()
+    """, (user_id, user_id)).fetchall()
     db.close()
     return ok(rows_to_list(rows))
 

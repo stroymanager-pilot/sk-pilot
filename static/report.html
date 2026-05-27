@@ -1068,7 +1068,9 @@ function renderPhotos() {
       <div class="photo-grid" id="photoGrid">
         ${S.photos.map(p=>`
           <div class="photo-thumb">
-            <img src="${API}/uploads/${esc(p.file_path)}" alt="">
+            <img src="${API}/uploads/${esc(p.file_path)}" alt=""
+              onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<div style=\\'aspect-ratio:16/10;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px;background:#fde8e8;color:#c00;font-size:12px;font-weight:600\\'>📷<br>Фото недоступно</div>')"
+            >
             <div class="photo-cap-wrap">
               <input class="photo-cap-input" placeholder="Подпись к фото..." value="${(p.caption||'').replace(/"/g,'&quot;')}"
                 ${S.isReadonly?'disabled':''} onblur="updateCaption(${p.id},this.value)">

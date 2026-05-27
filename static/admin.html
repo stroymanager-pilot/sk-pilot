@@ -846,11 +846,13 @@ async function saveEngineer() {
 
 // ── ВСЕ СВОДКИ ──
 async function loadAllReports() {
-  // Populate project filter if not yet loaded
+  // Populate project filter (always check, state.projects may be cached from another tab)
   const fpEl = document.getElementById('filterProject');
-  if (fpEl && fpEl.options.length <= 1 && state.projects.length === 0) {
-    const res = await fetch(`${API}/api/projects`).then(r=>r.json()).catch(()=>({data:[]}));
-    state.projects = res.data || [];
+  if (fpEl && fpEl.options.length <= 1) {
+    if (state.projects.length === 0) {
+      const res = await fetch(`${API}/api/projects`).then(r=>r.json()).catch(()=>({data:[]}));
+      state.projects = res.data || [];
+    }
     state.projects.forEach(p => {
       const opt = document.createElement('option'); opt.value=p.id; opt.textContent=p.name; fpEl.appendChild(opt);
     });
