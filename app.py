@@ -1071,6 +1071,7 @@ def all_reports():
     user_id = request.args.get('user_id')
     query = """
         SELECT dr.*, u.full_name as engineer_name,
+               COALESCE(u.is_active,1) as engineer_active,
                o.name as object_name, p.name as project_name
         FROM daily_reports dr
         JOIN users u ON u.id=dr.user_id

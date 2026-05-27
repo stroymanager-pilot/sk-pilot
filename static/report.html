@@ -264,6 +264,17 @@ function closeModal(name){document.getElementById('modal-'+name).classList.remov
 
 async function init() {
   try {
+    // Б5: проверяем что пользователь не переведён в архив
+    const usersRes = await fetchWithRetry(`${API}/api/users`).then(r=>r.json()).catch(()=>null);
+    if (usersRes?.data) {
+      const me = usersRes.data.find(u=>u.id===userId);
+      if (me && me.is_active === 0) {
+        sessionStorage.clear();
+        window.location.href = '/login.html';
+        return;
+      }
+    }
+
     const objRes = await fetchWithRetry(`${API}/api/users/${userId}/objects`).then(r=>r.json());
     const userObjs = objRes.data || [];
     if (!userObjs.length) {

@@ -443,7 +443,7 @@ async function init() {
 async function loadDashboard() {
   document.getElementById('statProjects').textContent = state.projects.length;
   document.getElementById('statObjects').textContent = state.objects.length;
-  document.getElementById('statEngineers').textContent = state.users.filter(u=>u.role!=='admin').length;
+  document.getElementById('statEngineers').textContent = state.users.filter(u=>u.role!=='admin' && u.is_active!==0).length;
 
   const rep = await fetch(`${API}/api/all_reports`).then(r=>r.json());
   const all = rep.data || [];
@@ -774,7 +774,8 @@ async function loadEngineers() {
       </div>
       <div class="list-actions" style="align-items:center">
         <span class="badge ${badgeClass}">${roleLabel}</span>
-        ${u.role!=='admin'?`<button class="btn btn-ghost btn-xs" onclick="editEngineer(${u.id})" title="Редактировать">✏</button>
+        ${u.role!=='admin'?`
+        ${isActive?`<button class="btn btn-ghost btn-xs" onclick="editEngineer(${u.id})" title="Редактировать">✏</button>`:''}
         ${isActive
           ?`<button class="btn btn-danger btn-xs" onclick="deactivateEngineer(${u.id},'${esc(u.full_name)}')" title="В архив">📦</button>`
           :`<button class="btn btn-ghost btn-xs" onclick="activateEngineer(${u.id})" title="Восстановить">↩</button>`
@@ -870,9 +871,9 @@ async function loadAllReports() {
   document.getElementById('reportsList').innerHTML = reports.length ? `
     <table class="table">
       <tr><th>Дата</th><th>Инженер</th><th>Проект</th><th>Объект</th><th>Статус</th></tr>
-      ${reports.map(r=>`<tr onclick="openReport(${r.id})" style="cursor:pointer">
+      ${reports.map(r=>`<tr onclick="openReport(${r.id})" style="cursor:pointer${r.engineer_active===0?';opacity:.65':''}">
         <td style="font-family:var(--mono)">${r.report_date}</td>
-        <td>${r.engineer_name||'—'}</td>
+        <td>${r.engineer_name||'—'}${r.engineer_active===0?' <span style="font-size:10px;color:var(--text3)">(архив)</span>':''}</td>
         <td>${r.project_name||'—'}</td>
         <td>${r.object_name||'—'}</td>
         <td><span class="badge ${r.status==='submitted'?'badge-active':'badge-type'}">${r.status==='submitted'?'Сдана':'Черновик'}</span></td>
