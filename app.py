@@ -711,6 +711,11 @@ def photo_check():
 @app.get('/api/users/<int:user_id>/objects')
 def user_objects(user_id):
     db = get_db()
+    # Б5: блокируем доступ для архивных пользователей на уровне сервера
+    user = db.execute("SELECT COALESCE(is_active,1) as is_active FROM users WHERE id=?", (user_id,)).fetchone()
+    if not user or user['is_active'] == 0:
+        db.close()
+        return err('Пользователь деактивирован. Обратитесь к администратору.', 403)
     rows = db.execute("""
         SELECT o.* FROM objects o
         JOIN object_users ou ON ou.object_id=o.id

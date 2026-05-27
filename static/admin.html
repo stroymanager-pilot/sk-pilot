@@ -422,7 +422,7 @@ async function init() {
 
     // Fill filter selects
     const fesel = document.getElementById('filterEngineer');
-    if (fesel) state.users.filter(u=>u.role!=='admin').forEach(u => {
+    if (fesel) state.users.filter(u=>u.role!=='admin' && u.is_active!==0).forEach(u => {
       const o = document.createElement('option'); o.value=u.id; o.textContent=u.full_name; fesel.appendChild(o);
     });
 

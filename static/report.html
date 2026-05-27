@@ -264,18 +264,13 @@ function closeModal(name){document.getElementById('modal-'+name).classList.remov
 
 async function init() {
   try {
-    // Б5: проверяем что пользователь не переведён в архив
-    const usersRes = await fetchWithRetry(`${API}/api/users`).then(r=>r.json()).catch(()=>null);
-    if (usersRes?.data) {
-      const me = usersRes.data.find(u=>u.id===userId);
-      if (me && me.is_active === 0) {
-        sessionStorage.clear();
-        window.location.href = '/login.html';
-        return;
-      }
-    }
-
     const objRes = await fetchWithRetry(`${API}/api/users/${userId}/objects`).then(r=>r.json());
+    // Б5: сервер вернёт 403 если пользователь деактивирован
+    if (objRes.ok === false) {
+      sessionStorage.clear();
+      window.location.href = '/login.html';
+      return;
+    }
     const userObjs = objRes.data || [];
     if (!userObjs.length) {
       document.getElementById('main').innerHTML='<div class="card"><div style="padding:20px;text-align:center;color:var(--red)"><strong>Нет назначенных объектов</strong><br><br>Обратитесь к администратору.</div></div>';
