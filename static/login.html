@@ -57,7 +57,7 @@ let selectedUserId=null,users=[];
 async function loadUsers(){
   try{
     const r=await fetch(`${API}/api/users`).then(r=>r.json());
-    users=r.data;
+    users=(r.data||[]).filter(u=>u.is_active!==0);
     document.getElementById('userList').innerHTML=users.map(u=>{
       const initials=u.full_name.split(' ').slice(0,2).map(n=>n[0]).join('');
       const role=u.role==='admin'?'Администратор':u.role==='senior'?'Главный инженер':'Инженер СК';
