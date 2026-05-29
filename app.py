@@ -1099,7 +1099,7 @@ def all_reports():
 
 @app.get('/api/admin/export_zip')
 def export_zip():
-    import zipfile, io, csv, os
+    import zipfile, io, csv, os, traceback
     user_id = request.args.get('user_id')
     project_id = request.args.get('project_id')
     db = get_db()
@@ -1107,6 +1107,13 @@ def export_zip():
     user = db.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
     if not user or user['role'] != 'admin':
         db.close(); return err('Доступ запрещён', 403)
+    try:
+        return _export_zip_inner(db, user_id, project_id)
+    except Exception as e:
+        return err(f'Ошибка экспорта: {traceback.format_exc()}', 500)
+
+def _export_zip_inner(db, user_id, project_id):
+    import zipfile, io, csv, os
 
     # Загружаем сводки
     q = """SELECT dr.id, dr.report_date, dr.status, dr.submitted_at,
@@ -1206,10 +1213,11 @@ def export_zip():
             if det.get('ic'):
                 lines.append('── ВХОДНОЙ КОНТРОЛЬ ' + '─' * 34)
                 for ic in det['ic']:
-                    status_ic = f"ОТКЛОНЕНИЕ: {ic['deviation_note']}" if ic.get('deviation_note') else 'Норма'
+                    dev = ic['deviation_note']
+                    status_ic = f"ОТКЛОНЕНИЕ: {dev}" if dev else 'Норма'
                     lines.append(f"  {ic['material_name'] or '—'}")
                     lines.append(f"    Кол-во: {ic['quantity'] or '—'}  ·  Документ: {ic['document_name'] or '—'}")
-                    if ic.get('contractor_name'):
+                    if ic['contractor_name']:
                         lines.append(f"    Подрядчик: {ic['contractor_name']}")
                     lines.append(f"    [{status_ic}]")
                 lines.append('')
@@ -1218,11 +1226,11 @@ def export_zip():
                 lines.append('── ОПЕРАЦИОННЫЙ КОНТРОЛЬ ' + '─' * 29)
                 for oc in det['oc']:
                     lines.append(f"  {oc['work_stage'] or '—'}  [{oc['section_name'] or ''}]")
-                    if oc.get('contractor_name'):
+                    if oc['contractor_name']:
                         lines.append(f"    Подрядчик: {oc['contractor_name']}")
                     lines.append(f"    Операции: {oc['controlled_operations'] or '—'}")
                     lines.append(f"    Метод: {oc['control_method'] or '—'}")
-                    if oc.get('deviation_note'):
+                    if oc['deviation_note']:
                         lines.append(f"    ОТКЛОНЕНИЕ: {oc['deviation_note']}")
                 lines.append('')
 
@@ -1230,9 +1238,9 @@ def export_zip():
                 lines.append('── ПРИЁМОЧНЫЙ КОНТРОЛЬ ' + '─' * 31)
                 for ac in det['ac']:
                     lines.append(f"  {ac['work_stage'] or '—'}  [{ac['section_name'] or ''}]")
-                    if ac.get('contractor_name'):
+                    if ac['contractor_name']:
                         lines.append(f"    Подрядчик: {ac['contractor_name']}")
-                    if ac.get('deviation_note'):
+                    if ac['deviation_note']:
                         lines.append(f"    ОТКЛОНЕНИЕ: {ac['deviation_note']}")
                 lines.append('')
 
@@ -1243,7 +1251,7 @@ def export_zip():
                 for rm in det['rem']:
                     mark = '[ОТКРЫТО]' if rm['status'] == 'open' else '[ЗАКРЫТО]'
                     lines.append(f"  {mark} {rm['description']}")
-                    if rm.get('deadline'):
+                    if rm['deadline']:
                         lines.append(f"    Срок: {rm['deadline']}")
                 lines.append('')
 

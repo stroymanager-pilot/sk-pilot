@@ -312,6 +312,11 @@ async function init() {
         console.error('Create report error:', createErr);
       }
     }
+    // Если сводка так и не создалась — показываем ошибку, не рендерим форму
+    if (!S.reportId) {
+      document.getElementById('main').innerHTML='<div class="card"><div style="padding:20px;text-align:center;color:var(--red)"><strong>Не удалось создать сводку</strong><br><br>Попробуйте обновить страницу. Если ошибка повторяется — обратитесь к администратору.</div></div>';
+      return;
+    }
     loadMeetingDefaults();
     buildNav();
     showStep(0);
@@ -1083,7 +1088,7 @@ function renderPhotos() {
               ${!S.isReadonly?`<button class="photo-rm-btn" onclick="removePhoto(${p.id},this.closest('.photo-thumb'))">✕</button>`:''}
             </div>
           </div>`).join('')}
-        ${!S.isReadonly?`<label class="photo-add-btn">
+        ${(!S.isReadonly && S.reportId)?`<label class="photo-add-btn">
           <span style="font-size:32px">📷</span>
           Добавить фото
           <input type="file" accept="image/*" multiple style="display:none" onchange="handlePhotos(event)">
@@ -1122,6 +1127,7 @@ async function removeProtocol() {
 }
 async function handlePhotos(e) {
   if (S.isReadonly) return;
+  if (!S.reportId) { toast('Сводка не готова, обновите страницу', 'err'); return; }
   const files=Array.from(e.target.files);
   setSaving(true);
   for(const file of files){
@@ -1341,6 +1347,7 @@ async function openPastReport(id, date) {
 // ── SUBMIT ──
 async function submitReport() {
   if(S.isReadonly){toast('Сводка уже сдана','ok');return;}
+  if(!S.reportId){toast('Ошибка: ID сводки не определён. Обновите страницу.','err');return;}
 
   // Валидация: минимальный состав сводки
   const hasPersonnel = S.personnel.some(p=>p.headcount>0) || window._prows?.some(r=>parseInt(r.headcount)>0);
