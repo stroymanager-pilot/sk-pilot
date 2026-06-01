@@ -1223,7 +1223,7 @@ async function openDraftReport(reportId) {
     // Show step 1
     currentStep = 0;
     showStep(0);
-    toast('Черновик от ' + d.report_date + ' открыт для редактирования','ok');
+    toast(d.status==='submitted' ? 'Сводка от '+d.report_date+' — просмотр' : 'Черновик от '+d.report_date+' открыт для редактирования','ok');
   } catch(e) {
     toast('Ошибка загрузки: ' + e.message, 'err');
   }
