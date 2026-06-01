@@ -574,17 +574,27 @@ function renderPersonnel() {
     </div>`;
 }
 
-async function savePersonnelBtn() { await saveAllPersonnel(false); toast('Персонал сохранён','ok'); }
+async function savePersonnelBtn() {
+  const saved = await saveAllPersonnel(false);
+  if (saved) toast('Персонал сохранён','ok');
+  else if (saved === false) toast('Нечего сохранять — введите количество > 0','err');
+}
 async function saveAllPersonnel(silent=false) {
-  if (S.isReadonly) return;
+  if (S.isReadonly) return null;
   const entries=window._prows.filter(r=>parseInt(r.headcount)>0||r.work_description).map(r=>({
     contractor_id:r.contractor_id,section_id:r.section_id,
     headcount:parseInt(r.headcount)||0,work_description:r.work_description}));
-  if (!entries.length) return;
+  if (!entries.length) return false;
   setSaving(true);
-  await fetch(`${API}/api/reports/${S.reportId}/personnel`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(entries)});
-  const r=await fetch(`${API}/api/reports/${S.reportId}`).then(r=>r.json());
-  S.personnel=r.data.personnel||[]; window._prows=[]; setSaving(false); updatePills();
+  try {
+    await fetch(`${API}/api/reports/${S.reportId}/personnel`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(entries)});
+    const r=await fetch(`${API}/api/reports/${S.reportId}`).then(r=>r.json());
+    S.personnel=r.data.personnel||[]; window._prows=[]; updatePills();
+    return true;
+  } catch(e) {
+    if (!silent) toast('Ошибка сохранения персонала: '+e.message,'err');
+    return false;
+  } finally { setSaving(false); }
 }
 
 // ── INPUT CONTROL ──
@@ -643,14 +653,16 @@ async function saveIC() {
   const mat=(document.getElementById('icMat').value||'').trim();
   if (!mat) { toast('Укажите наименование','err'); return; }
   setSaving(true);
-  const r=await fetch(`${API}/api/reports/${S.reportId}/input_control`,{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({material_name:mat,quantity:document.getElementById('icQty').value,
-      document_name:document.getElementById('icDoc').value,
-      section_id:document.getElementById('icSec')?.value||null,
-      contractor_id:document.getElementById('icCon')?.value||null,
-      deviation_note:document.getElementById('icStatus').value?document.getElementById('icDev').value:'',
-      engineer_id:userId})}).then(r=>r.json());
-  S.inputControl.push(r.data); setSaving(false); toast('Добавлено','ok'); showStep(currentStep);
+  try {
+    const r=await fetch(`${API}/api/reports/${S.reportId}/input_control`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({material_name:mat,quantity:document.getElementById('icQty').value,
+        document_name:document.getElementById('icDoc').value,
+        section_id:document.getElementById('icSec')?.value||null,
+        contractor_id:document.getElementById('icCon')?.value||null,
+        deviation_note:document.getElementById('icStatus').value?document.getElementById('icDev').value:'',
+        engineer_id:userId})}).then(r=>r.json());
+    S.inputControl.push(r.data); toast('Добавлено','ok'); showStep(currentStep);
+  } catch(e) { toast('Ошибка: '+e.message,'err'); } finally { setSaving(false); }
 }
 
 async function deleteIC(id) {
@@ -724,38 +736,44 @@ async function saveOC() {
   const stage=(document.getElementById('ocStage').value||'').trim();
   if (!stage) { toast('Укажите этап','err'); return; }
   setSaving(true);
-  const ocStatusEl=document.getElementById('ocSec_status');
-  const ocDevEl=document.getElementById('ocSec_dev');
-  await fetch(`${API}/api/reports/${S.reportId}/operational_control`,{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({work_stage:stage,controlled_operations:document.getElementById('ocOps').value,
-      control_method:document.getElementById('ocMethod').value,section_id:document.getElementById('ocSec').value,
-      contractor_id:document.getElementById('ocStageCon')?.value||null,
-      status:ocStatusEl?.value||'',deviation_note:ocStatusEl?.value&&ocDevEl?ocDevEl.value:'',
-      engineer_id:userId})});
-  const r=await fetch(`${API}/api/reports/${S.reportId}`).then(r=>r.json());
-  if(S.report)S.report.operational_control=r.data.operational_control;
-  setSaving(false); toast('Сохранено','ok'); showStep(currentStep);
+  try {
+    const ocStatusEl=document.getElementById('ocSec_status');
+    const ocDevEl=document.getElementById('ocSec_dev');
+    await fetch(`${API}/api/reports/${S.reportId}/operational_control`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({work_stage:stage,controlled_operations:document.getElementById('ocOps').value,
+        control_method:document.getElementById('ocMethod').value,section_id:document.getElementById('ocSec').value,
+        contractor_id:document.getElementById('ocStageCon')?.value||null,
+        status:ocStatusEl?.value||'',deviation_note:ocStatusEl?.value&&ocDevEl?ocDevEl.value:'',
+        engineer_id:userId})});
+    const r=await fetch(`${API}/api/reports/${S.reportId}`).then(r=>r.json());
+    if(S.report)S.report.operational_control=r.data.operational_control;
+    toast('Сохранено','ok'); showStep(currentStep);
+  } catch(e) { toast('Ошибка: '+e.message,'err'); } finally { setSaving(false); }
 }
 async function deleteOC(id) {
   if (S.isReadonly) return;
-  await fetch(`${API}/api/operational_control/${id}`,{method:'DELETE'});
-  if(S.report)S.report.operational_control=(S.report.operational_control||[]).filter(o=>o.id!==id);
-  showStep(currentStep);
+  try {
+    await fetch(`${API}/api/operational_control/${id}`,{method:'DELETE'});
+    if(S.report)S.report.operational_control=(S.report.operational_control||[]).filter(o=>o.id!==id);
+    showStep(currentStep);
+  } catch(e) { toast('Ошибка удаления','err'); }
 }
 async function saveAC() {
   if (S.isReadonly) return;
   const stage=(document.getElementById('acStage').value||'').trim();
   if (!stage) { toast('Укажите этап','err'); return; }
   setSaving(true);
-  const acStatusEl=document.getElementById('acSec_status');
-  const acDevEl=document.getElementById('acSec_dev');
-  const r=await fetch(`${API}/api/reports/${S.reportId}/acceptance_control`,{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({work_stage:stage,controlled_operations:document.getElementById('acOps').value,
-      control_method:document.getElementById('acMethod').value,section_id:document.getElementById('acSec').value,
-      contractor_id:document.getElementById('acStageCon')?.value||null,
-      status:acStatusEl?.value||'',deviation_note:acStatusEl?.value&&acDevEl?acDevEl.value:'',
-      engineer_id:userId})}).then(r=>r.json());
-  S.acceptanceControl.push(r.data); setSaving(false); toast('Сохранено','ok'); showStep(currentStep);
+  try {
+    const acStatusEl=document.getElementById('acSec_status');
+    const acDevEl=document.getElementById('acSec_dev');
+    const r=await fetch(`${API}/api/reports/${S.reportId}/acceptance_control`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({work_stage:stage,controlled_operations:document.getElementById('acOps').value,
+        control_method:document.getElementById('acMethod').value,section_id:document.getElementById('acSec').value,
+        contractor_id:document.getElementById('acStageCon')?.value||null,
+        status:acStatusEl?.value||'',deviation_note:acStatusEl?.value&&acDevEl?acDevEl.value:'',
+        engineer_id:userId})}).then(r=>r.json());
+    S.acceptanceControl.push(r.data); toast('Сохранено','ok'); showStep(currentStep);
+  } catch(e) { toast('Ошибка: '+e.message,'err'); } finally { setSaving(false); }
 }
 async function deleteAC(id) {
   if (S.isReadonly) return;
@@ -866,12 +884,14 @@ async function savePrescription() {
   if (!num) { toast('Укажите номер','err'); return; }
   if (!num.startsWith('№')) num = '№ ' + num;
   setSaving(true);
-  await fetch(`${API}/api/reports/${S.reportId}/prescriptions`,{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({number:num,issue_date:document.getElementById('preDate').value||dateStr,
-      deadline:document.getElementById('preDeadline').value||null,status:document.getElementById('preStatus').value,
-      section_id:document.getElementById('preSec').value,tj_prescription_id:document.getElementById('preTjId').value||null})});
-  const r=await fetch(`${API}/api/reports/${S.reportId}`).then(r=>r.json());
-  S.prescriptions=r.data.prescriptions_log||[]; setSaving(false); toast('Добавлено','ok'); showStep(currentStep);
+  try {
+    await fetch(`${API}/api/reports/${S.reportId}/prescriptions`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({number:num,issue_date:document.getElementById('preDate').value||dateStr,
+        deadline:document.getElementById('preDeadline').value||null,status:document.getElementById('preStatus').value,
+        section_id:document.getElementById('preSec').value,tj_prescription_id:document.getElementById('preTjId').value||null})});
+    const r=await fetch(`${API}/api/reports/${S.reportId}`).then(r=>r.json());
+    S.prescriptions=r.data.prescriptions_log||[]; toast('Добавлено','ok'); showStep(currentStep);
+  } catch(e) { toast('Ошибка: '+e.message,'err'); } finally { setSaving(false); }
 }
 async function deletePre(id) {
   if(S.isReadonly)return;
@@ -944,14 +964,16 @@ async function saveKS2() {
   const c=document.getElementById('ks2Con').value.trim();
   if (!c) { toast('Укажите организацию','err'); return; }
   setSaving(true);
-  const r=await fetch(`${API}/api/reports/${S.reportId}/ks2_check`,{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({contractor_name:c,object_work:document.getElementById('ks2Work').value,
-      ks2_number:document.getElementById('ks2Num').value,
-      ks3_number:document.getElementById('ks2Num3').value,
-      has_ks3:document.getElementById('ks2Num3').value?1:0,
-      has_ks6a:document.getElementById('ks2Ks6a').checked,
-      has_id:document.getElementById('ks2Id').checked,engineer_id:userId})}).then(r=>r.json());
-  S.ks2Check.push(r.data); setSaving(false); toast('Добавлено','ok'); showStep(currentStep);
+  try {
+    const r=await fetch(`${API}/api/reports/${S.reportId}/ks2_check`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({contractor_name:c,object_work:document.getElementById('ks2Work').value,
+        ks2_number:document.getElementById('ks2Num').value,
+        ks3_number:document.getElementById('ks2Num3').value,
+        has_ks3:document.getElementById('ks2Num3').value?1:0,
+        has_ks6a:document.getElementById('ks2Ks6a').checked,
+        has_id:document.getElementById('ks2Id').checked,engineer_id:userId})}).then(r=>r.json());
+    S.ks2Check.push(r.data); toast('Добавлено','ok'); showStep(currentStep);
+  } catch(e) { toast('Ошибка: '+e.message,'err'); } finally { setSaving(false); }
 }
 async function deleteKS2(id) {
   if(S.isReadonly)return;
@@ -1108,22 +1130,23 @@ async function uploadProtocol(e) {
   if (S.isReadonly) return;
   const file = e.target.files[0]; if (!file) return;
   setSaving(true);
-  // Сначала создаём совещание чтобы получить meetingId
-  if (!S.meetingId) {
-    await saveMeeting(true, true); // force=true — создать даже пустое
-  }
-  if (!S.meetingId) {
-    toast('Сначала сохраните данные совещания','err');
-    setSaving(false); return;
-  }
-  const fd = new FormData(); fd.append('file', file);
-  const r = await fetch(`${API}/api/meetings/${S.meetingId}/protocol`, {method:'POST', body:fd}).then(r=>r.json()).catch(()=>({ok:false}));
-  if (r.ok) {
-    S.meetingProtocol = r.data.file_path;
-    S.meetingProtocolName = r.data.original_name || file.name;
-    toast('Протокол загружен','ok');
-  } else { toast('Ошибка загрузки протокола','err'); }
-  setSaving(false); showStep(currentStep);
+  try {
+    if (!S.meetingId) {
+      await saveMeeting(true, true);
+    }
+    if (!S.meetingId) {
+      toast('Сначала сохраните данные совещания','err');
+      return;
+    }
+    const fd = new FormData(); fd.append('file', file);
+    const r = await fetch(`${API}/api/meetings/${S.meetingId}/protocol`, {method:'POST', body:fd}).then(r=>r.json());
+    if (r.ok) {
+      S.meetingProtocol = r.data.file_path;
+      S.meetingProtocolName = r.data.original_name || file.name;
+      toast('Протокол загружен','ok');
+    } else { toast('Ошибка загрузки протокола: '+(r.error||''),'err'); }
+    showStep(currentStep);
+  } catch(e) { toast('Ошибка загрузки: '+e.message,'err'); } finally { setSaving(false); }
 }
 async function removeProtocol() {
   if (S.isReadonly || !confirm('Удалить протокол?')) return;
