@@ -612,7 +612,7 @@ function renderInput() {
         <div class="row2">
           <div><label class="fl">Статус</label>
             <select id="icStatus" onchange="document.getElementById('icDevRow').style.display=this.value?'block':'none'">
-              <option value="">✓ Норма</option><option value="Отклонение выявлено">⚠ Отклонение</option><option value="Материал отклонён">✕ Отклонён</option>
+              <option value="">✓ Норма</option><option value="Отклонение выявлено">⚠ Принято с замечанием</option><option value="Материал отклонён">✕ Не принят</option>
             </select>
           </div>
           <div></div>
@@ -835,7 +835,7 @@ function renderPrescriptions() {
         <div class="row3">
           <div><label class="fl no-mt">Номер</label><input id="preNum" placeholder="№ 26"></div>
           <div><label class="fl no-mt">Дата выдачи</label><input type="date" id="preDate"></div>
-          <div><label class="fl no-mt">Срок</label><input type="date" id="preDeadline"></div>
+          <div><label class="fl no-mt">Срок устранения</label><input type="date" id="preDeadline"></div>
         </div>
         <div class="row2">
           <div><label class="fl">Участок</label><select id="preSec">${sectionOpts(S.allSections[0]?.id)}</select></div>
@@ -855,7 +855,7 @@ function renderPrescriptions() {
           <span style="font-size:11px;font-weight:700;background:var(--amber-pale);color:var(--amber);padding:2px 8px;border-radius:10px;margin-left:6px">${p.status||'—'}</span></div>
           ${!S.isReadonly?`<button class="p-rm" onclick="deletePre(${p.id})">✕</button>`:''}
         </div>
-        <div style="font-size:12px;color:var(--text3);margin-top:3px">Выдано: ${fmtDate(p.issue_date)} · Срок: ${fmtDate(p.deadline)} · ${esc(p.section_name)||'—'}</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:3px">Выдано: ${fmtDate(p.issue_date)} · Срок устранения: ${fmtDate(p.deadline)} · ${esc(p.section_name)||'—'}</div>
       </div>`).join('')}
     </div>`:''}`;
 }
