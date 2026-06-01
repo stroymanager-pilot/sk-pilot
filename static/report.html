@@ -967,6 +967,8 @@ function loadMeetingDefaults() {
   if(!_meetingData.part&&d.participants) _meetingData.part=d.participants;
   if(!_meetingData.day&&d.day) _meetingData.day=d.day;
   if(!_meetingData.date&&d.date) _meetingData.date=d.date;
+  // Переносим вопросы из предыдущей сводки если текущее совещание ещё не заполнено
+  if(!_meetingData.agenda&&d.agenda) _meetingData.agenda=d.agenda;
 }
 function formatMeetingDate(d) {
   if(!d) return '—';
@@ -986,6 +988,7 @@ function renderMeeting() {
       <div class="info-row"><span class="info-lbl">Дата</span><span>${_meetingData.date?formatMeetingDate(_meetingData.date):(_meetingData.day||'—')}</span></div>
       <div class="info-row"><span class="info-lbl">Время</span><span>${_meetingData.time||'—'}</span></div>
       <div class="info-row"><span class="info-lbl">Место</span><span style="white-space:pre-line">${_meetingData.loc||'—'}</span></div>
+      ${_meetingData.agenda?`<div style="margin-top:8px"><div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:4px">Вопросы к совещанию</div><div style="font-size:14px;white-space:pre-line">${esc(_meetingData.agenda)}</div></div>`:''}
     </div>`;
   return `
     <div style="font-size:13px;color:var(--text3);margin-bottom:14px">Еженедельное совещание на объекте</div>
@@ -999,8 +1002,9 @@ function renderMeeting() {
       </div>
       <label class="fl">Место проведения</label>
       <textarea id="mLoc" style="min-height:56px" placeholder="Строительная площадка...">${_meetingData.loc}</textarea>
-      <label class="fl">Тематика / повестка</label>
-      <textarea id="mAgenda" style="min-height:68px" placeholder="Вопросы рассмотренные на совещании...">${_meetingData.agenda}</textarea>
+      <label class="fl">Вопросы к совещанию</label>
+      <textarea id="mAgenda" style="min-height:90px" placeholder="Добавьте вопросы к следующему совещанию...">${_meetingData.agenda}</textarea>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">📌 Вопросы автоматически переносятся в каждую новую сводку</div>
       <div style="display:flex;gap:8px;margin-top:12px">
         <button class="btn-p" onclick="saveMeeting(false)">💾 Сохранить</button>
         <button class="btn-s" onclick="clearMeeting()">Очистить</button>
@@ -1058,6 +1062,11 @@ async function saveMeeting(silent=false, force=false) {
   const data={location:location||'Совещание',time,participants:part,agenda,engineer_id:userId};
   if(S.meetingId) await fetch(`${API}/api/meetings/${S.meetingId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
   else { const r=await fetch(`${API}/api/reports/${S.reportId}/meetings`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(r=>r.json()); S.meetingId=r.data?.id||null; }
+  // Сохраняем agenda в localStorage — перенесётся в следующую сводку
+  if(agenda) {
+    const def=JSON.parse(localStorage.getItem('meetingDefaults')||'{}');
+    localStorage.setItem('meetingDefaults', JSON.stringify({...def, agenda}));
+  }
   setSaving(false);
   if(!silent) toast('Совещание сохранено','ok');
 }
