@@ -526,11 +526,11 @@ function renderPersonnel() {
     if (S.personnel.length>0) {
       const saved=S.personnel.map(p=>({...p,saved:true}));
       const usedIds=new Set(S.personnel.map(p=>p.contractor_id));
-      const unsaved=S.contractors.filter(c=>!usedIds.has(c.id)).map(c=>({
+      const unsaved=S.contractors.filter(c=>c.work_type!=='Заказчик'&&!usedIds.has(c.id)).map(c=>({
         contractor_id:c.id,contractor_name:c.name,section_id:S.allSections[0]?.id,headcount:0,work_description:'',saved:false}));
       window._prows=[...saved,...unsaved];
     } else {
-      window._prows=S.contractors.map(c=>({contractor_id:c.id,contractor_name:c.name,
+      window._prows=S.contractors.filter(c=>c.work_type!=='Заказчик').map(c=>({contractor_id:c.id,contractor_name:c.name,
         section_id:S.allSections[0]?.id,headcount:0,work_description:'',saved:false}));
     }
   }
@@ -555,8 +555,8 @@ function renderPersonnel() {
         const idx=window._prows.indexOf(row);
         return `<div class="p-row">
           <div class="p-row-head">
-            <div style="flex:1"><div class="p-name">${row.contractor_name}</div>
-            <select style="margin-top:4px;font-size:12px;padding:4px 28px 4px 8px;background:var(--surface)" onchange="window._prows[${idx}].section_id=this.value">
+            <div style="flex:1;min-width:0"><div class="p-name">${row.contractor_name}</div>
+            <select style="margin-top:4px;font-size:12px;padding:4px 28px 4px 8px;background:var(--surface);width:100%;min-width:0" onchange="window._prows[${idx}].section_id=this.value">
               ${sectionOpts(row.section_id)}
             </select></div>
             <input type="number" class="p-hc" value="${row.headcount||''}" min="0" placeholder="0"
@@ -862,8 +862,9 @@ function renderPrescriptions() {
 
 async function savePrescription() {
   if (S.isReadonly) return;
-  const num=document.getElementById('preNum').value.trim();
+  let num=document.getElementById('preNum').value.trim();
   if (!num) { toast('Укажите номер','err'); return; }
+  if (!num.startsWith('№')) num = '№ ' + num;
   setSaving(true);
   await fetch(`${API}/api/reports/${S.reportId}/prescriptions`,{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({number:num,issue_date:document.getElementById('preDate').value||dateStr,
@@ -979,7 +980,6 @@ function formatMeetingDate(d) {
 
 function renderMeeting() {
   if (S.isReadonly) return `
-    <div style="font-size:19px;font-weight:800;color:var(--navy);margin-bottom:14px">Совещание</div>
     <div class="readonly-banner">✅ Сводка сдана — редактирование недоступно</div>
     <div class="card">
       <div class="card-h"><div class="ico">🤝</div>Данные совещания</div>
@@ -989,7 +989,6 @@ function renderMeeting() {
       <div style="padding:9px 0;font-size:14px;white-space:pre-line">${_meetingData.part||'—'}</div>
     </div>`;
   return `
-    <div style="font-size:19px;font-weight:800;color:var(--navy);margin-bottom:4px">Совещание</div>
     <div style="font-size:13px;color:var(--text3);margin-bottom:14px">Еженедельное совещание на объекте</div>
     <div class="card">
       <div class="card-h"><div class="ico">🤝</div>Данные совещания</div>
