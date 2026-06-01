@@ -4,11 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#0d1f3c">
+<meta name="theme-color" content="#0F2835">
 <title>Сводка СК</title>
-<link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Geologica:wght@400;600;700;900&family=Roboto:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
-:root{--navy:#0d1f3c;--navy2:#152c52;--navy3:#1e3d6e;--gold:#d4a843;--gold-pale:#fdf3dc;--red:#c84040;--red-pale:#fde8e8;--green:#3a8c5c;--green-pale:#e4f2ec;--amber:#b87a10;--amber-pale:#fef3cd;--surface:#f0f3f9;--surface2:#e2e8f4;--border:#c8d2e8;--text:#0d1f3c;--text2:#4a5f80;--text3:#8098b8;--white:#fff;--r:10px;--r-sm:7px;--shadow:0 2px 12px rgba(13,31,60,.09);--font:'Golos Text',sans-serif;--mono:'JetBrains Mono',monospace;}
+:root{--navy:#0F2835;--navy2:#1a3040;--navy3:#344966;--gold:#CA2E55;--gold-pale:#fce8ee;--red:#c84040;--red-pale:#fde8e8;--green:#3a8c5c;--green-pale:#e4f2ec;--amber:#b87a10;--amber-pale:#fef3cd;--surface:#f0f3f9;--surface2:#e2e8f4;--border:#c8d2e8;--text:#0F2835;--text2:#4a5f80;--text3:#8098b8;--white:#fff;--r:10px;--r-sm:7px;--shadow:0 2px 12px rgba(15,40,53,.09);--font:'Roboto',sans-serif;--font-h:'Geologica',sans-serif;--mono:'JetBrains Mono',monospace;}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 body{font-family:var(--font);background:var(--surface);color:var(--text);min-height:100dvh;font-size:15px}
 /* HEADER */
@@ -16,7 +16,7 @@ body{font-family:var(--font);background:var(--surface);color:var(--text);min-hei
 .hdr-row{display:flex;align-items:center;justify-content:space-between;padding:11px 16px 9px}
 .hdr-brand{display:flex;align-items:center;gap:10px}
 .hdr-mark{width:32px;height:32px;background:var(--gold);border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;font-weight:700;color:var(--navy);flex-shrink:0}
-.hdr-title{font-size:14px;font-weight:700;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hdr-title{font-size:14px;font-weight:700;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--font-h)}
 .hdr-sub{font-size:11px;color:rgba(255,255,255,.45);margin-top:1px}
 .hdr-right{display:flex;align-items:center;gap:8px}
 .status-pill{font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;background:rgba(255,255,255,.12);color:rgba(255,255,255,.6)}
@@ -108,8 +108,8 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 .hist-stat.submitted{background:var(--green-pale);color:var(--green)}
 .hist-stat.draft{background:var(--amber-pale);color:var(--amber)}
 /* BUTTONS */
-.btn-p{display:inline-flex;align-items:center;gap:6px;padding:10px 18px;border-radius:var(--r-sm);border:none;background:var(--navy);color:#fff;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;transition:all .15s}
-.btn-p:hover{background:var(--navy2)}
+.btn-p{display:inline-flex;align-items:center;gap:6px;padding:10px 18px;border-radius:var(--r-sm);border:none;background:var(--gold);color:#fff;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;transition:all .15s}
+.btn-p:hover{background:#a8243f}
 .btn-p:disabled{background:#aaa;cursor:default}
 .btn-s{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:var(--r-sm);border:1.5px solid var(--border);background:#fff;color:var(--text2);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer}
 .btn-s:hover{border-color:var(--navy3);color:var(--navy)}
