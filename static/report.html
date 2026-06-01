@@ -289,7 +289,7 @@ async function init() {
       fetchWithRetry(`${API}/api/objects/${S.objectId}/my_sections?user_id=${userId}`).then(r=>r.json()),
     ]);
     S.object = objDetail.data;
-    S.contractors = S.object.contractors.filter(c=>c.is_active);
+    S.contractors = S.object.contractors.filter(c=>c.is_active && c.work_type !== 'Заказчик');
     S.sections = S.object.sections.filter(s=>s.is_active);
     S.mySections = mySecs.data || [];
     // Combine admin sections + my own sections
@@ -449,7 +449,7 @@ function renderInfo() {
     <div class="card">
       <div class="card-h"><div class="ico">🏗</div>Сводка</div>
       ${[['Объект',o.name],['Адрес',o.address||'—'],['Заказчик',o.client_name||'—'],
-         ['Договор',o.contract_number||'—'],['Инженер',userName],['Дата',S.report?.report_date||dateStr],
+         ['Инженер',userName],['Дата',S.report?.report_date||dateStr],
          ['Статус',`<span class="chip ${S.isReadonly?'chip-ok':'chip-draft'}">${S.isReadonly?'Сдана':'Черновик'}</span>`]
       ].map(([l,v])=>`<div class="info-row"><span class="info-lbl">${l}</span><span>${v}</span></div>`).join('')}
     </div>
@@ -684,8 +684,8 @@ function renderOCsection(title, ico, items, addFn, delFn, stageId, opsId, method
           <div><label class="fl no-mt">Статус</label>
             <select id="${secId}_status" onchange="document.getElementById('${secId}_devrow').style.display=this.value?'block':'none'">
               <option value="">✓ Норма</option>
-              <option value="Отклонение выявлено">⚠ Отклонение</option>
-              <option value="Работы остановлены">✕ Остановлено</option>
+              <option value="Отклонение выявлено">⚠ Принято с замечанием</option>
+              <option value="Работы остановлены">✕ Не принят</option>
             </select>
           </div>
           <div></div>
@@ -985,8 +985,7 @@ function renderMeeting() {
       <div class="card-h"><div class="ico">🤝</div>Данные совещания</div>
       <div class="info-row"><span class="info-lbl">Дата</span><span>${_meetingData.date?formatMeetingDate(_meetingData.date):(_meetingData.day||'—')}</span></div>
       <div class="info-row"><span class="info-lbl">Время</span><span>${_meetingData.time||'—'}</span></div>
-      <div class="info-row"><span class="info-lbl">Место</span><span>${_meetingData.loc||'—'}</span></div>
-      <div style="padding:9px 0;font-size:14px;white-space:pre-line">${_meetingData.part||'—'}</div>
+      <div class="info-row"><span class="info-lbl">Место</span><span style="white-space:pre-line">${_meetingData.loc||'—'}</span></div>
     </div>`;
   return `
     <div style="font-size:13px;color:var(--text3);margin-bottom:14px">Еженедельное совещание на объекте</div>
@@ -998,9 +997,8 @@ function renderMeeting() {
         </div>
         <div><label class="fl no-mt">Время начала</label><input type="time" id="mTime" value="${_meetingData.time}"></div>
       </div>
-      <label class="fl">Место проведения</label><input id="mLoc" value="${_meetingData.loc}" placeholder="Строительная площадка...">
-      <label class="fl">Участники</label>
-      <textarea id="mPart" style="min-height:80px" placeholder="Глуховской А.К. — инженер СК&#10;Иванов И.И. — прораб...">${_meetingData.part}</textarea>
+      <label class="fl">Место проведения</label>
+      <textarea id="mLoc" style="min-height:56px" placeholder="Строительная площадка...">${_meetingData.loc}</textarea>
       <label class="fl">Тематика / повестка</label>
       <textarea id="mAgenda" style="min-height:68px" placeholder="Вопросы рассмотренные на совещании...">${_meetingData.agenda}</textarea>
       <div style="display:flex;gap:8px;margin-top:12px">
