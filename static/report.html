@@ -559,7 +559,7 @@ function renderPersonnel() {
             <select style="margin-top:4px;font-size:12px;padding:4px 28px 4px 8px;background:var(--surface);width:100%;min-width:0" onchange="window._prows[${idx}].section_id=this.value">
               ${sectionOpts(row.section_id)}
             </select></div>
-            <input type="number" class="p-hc" value="${row.headcount||''}" min="0" placeholder="0"
+            <input type="number" class="p-hc" style="width:64px;flex-shrink:0" value="${row.headcount||''}" min="0" placeholder="0"
               onchange="window._prows[${idx}].headcount=parseInt(this.value)||0">
             <button class="p-rm" onclick="window._prows.splice(${idx},1);showStep(${currentStep})">✕</button>
           </div>
