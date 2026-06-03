@@ -93,7 +93,7 @@ def init_db():
         id                  INTEGER PRIMARY KEY AUTOINCREMENT,
         report_id           INTEGER NOT NULL REFERENCES daily_reports(id) ON DELETE CASCADE,
         contractor_id       INTEGER NOT NULL REFERENCES contractors(id),
-        section_id          INTEGER REFERENCES sections(id),  -- к какому корпусу
+        section_id          INTEGER,  -- нет FK: допускает личные участки (user_sections)
         headcount           INTEGER DEFAULT 0,
         work_description    TEXT    -- фактические работы за день
     );
@@ -124,7 +124,7 @@ def init_db():
     CREATE TABLE IF NOT EXISTS verbal_remarks (
         id              INTEGER PRIMARY KEY AUTOINCREMENT,
         report_id       INTEGER NOT NULL REFERENCES daily_reports(id) ON DELETE CASCADE,
-        section_id      INTEGER REFERENCES sections(id),
+        section_id      INTEGER,  -- нет FK: допускает личные участки (user_sections)
         description     TEXT NOT NULL,
         deadline        TEXT,           -- срок устранения (YYYY-MM-DD)
         status          TEXT DEFAULT 'open',  -- open / closed
