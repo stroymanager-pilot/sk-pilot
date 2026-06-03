@@ -35,7 +35,7 @@ def auto_migrate():
     CREATE TABLE IF NOT EXISTS acceptance_control (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         report_id INTEGER NOT NULL REFERENCES daily_reports(id) ON DELETE CASCADE,
-        section_id INTEGER REFERENCES sections(id),
+        section_id INTEGER,
         work_stage TEXT, controlled_operations TEXT,
         control_method TEXT, status TEXT DEFAULT '',
         deviation_note TEXT DEFAULT '',
@@ -76,7 +76,63 @@ def auto_migrate():
             db.commit()
         except Exception:
             pass  # колонка уже существует
+
+    # Идемпотентная починка: убрать FK REFERENCES sections(id) у operational_control и acceptance_control.
+    # Личные участки (user_sections) имеют свои id, которые не совпадают с sections → constraint failed.
+    _fix_section_id_fk(db)
+
     db.close()
+
+def _fix_section_id_fk(db):
+    """Перестраивает operational_control и acceptance_control без FK на sections(id)."""
+    tables = {
+        'operational_control': (
+            "CREATE TABLE operational_control_new ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "report_id INTEGER NOT NULL REFERENCES daily_reports(id) ON DELETE CASCADE,"
+            "section_id INTEGER,"
+            "work_stage TEXT, controlled_operations TEXT, control_method TEXT,"
+            "status TEXT DEFAULT '', deviation_note TEXT DEFAULT '',"
+            "engineer_id INTEGER REFERENCES users(id),"
+            "contractor_id INTEGER)"
+        ),
+        'acceptance_control': (
+            "CREATE TABLE acceptance_control_new ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "report_id INTEGER NOT NULL REFERENCES daily_reports(id) ON DELETE CASCADE,"
+            "section_id INTEGER,"
+            "work_stage TEXT, controlled_operations TEXT, control_method TEXT,"
+            "status TEXT DEFAULT '', deviation_note TEXT DEFAULT '',"
+            "engineer_id INTEGER REFERENCES users(id),"
+            "contractor_id INTEGER)"
+        ),
+    }
+    for tbl, create_sql in tables.items():
+        fk_list = db.execute(f"PRAGMA foreign_key_list({tbl})").fetchall()
+        has_sections_fk = any(row['table'] == 'sections' and row['from'] == 'section_id' for row in fk_list)
+        if not has_sections_fk:
+            continue
+        # Перестройка без FK
+        db.execute("PRAGMA foreign_keys = OFF")
+        db.execute("BEGIN")
+        try:
+            db.execute(create_sql)
+            # Копируем только те колонки, которые точно есть (безопасно для разных состояний БД)
+            cols_row = db.execute(f"PRAGMA table_info({tbl})").fetchall()
+            cols = [r['name'] for r in cols_row]
+            new_cols_row = db.execute(f"PRAGMA table_info({tbl}_new)").fetchall()
+            new_cols = [r['name'] for r in new_cols_row]
+            shared = [c for c in cols if c in new_cols]
+            col_list = ', '.join(shared)
+            db.execute(f"INSERT INTO {tbl}_new ({col_list}) SELECT {col_list} FROM {tbl}")
+            db.execute(f"DROP TABLE {tbl}")
+            db.execute(f"ALTER TABLE {tbl}_new RENAME TO {tbl}")
+            db.execute("COMMIT")
+        except Exception as e:
+            db.execute("ROLLBACK")
+            print(f"⚠️  _fix_section_id_fk({tbl}) failed: {e}")
+        finally:
+            db.execute("PRAGMA foreign_keys = ON")
 
 auto_migrate()
 CORS(app)

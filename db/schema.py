@@ -113,7 +113,7 @@ def init_db():
     CREATE TABLE IF NOT EXISTS operational_control (
         id                      INTEGER PRIMARY KEY AUTOINCREMENT,
         report_id               INTEGER NOT NULL REFERENCES daily_reports(id) ON DELETE CASCADE,
-        section_id              INTEGER REFERENCES sections(id),
+        section_id              INTEGER,  -- нет FK: допускает личные участки (user_sections)
         work_stage              TEXT,   -- этап работ
         controlled_operations   TEXT,   -- контролируемые операции
         control_method          TEXT,   -- метод и объём контроля
@@ -140,7 +140,7 @@ def init_db():
         tj_prescription_id  TEXT,       -- ID предписания в TeamJect
         number              TEXT,       -- номер предписания ("№ 26")
         issue_date          TEXT,
-        section_id          INTEGER REFERENCES sections(id),
+        section_id          INTEGER,    -- нет FK: допускает личные участки (user_sections)
         deadline            TEXT,
         status              TEXT        -- статус из TeamJect (вносится вручную)
     );
