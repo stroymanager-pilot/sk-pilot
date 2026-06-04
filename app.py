@@ -168,7 +168,19 @@ def err(msg, code=400):
 
 @app.get('/api/objects')
 def list_objects():
+    user_id = request.args.get('user_id')
     db = get_db()
+    if user_id:
+        user = db.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
+        if user and user['role'] == 'engineer':
+            rows = db.execute(
+                "SELECT o.* FROM objects o "
+                "JOIN object_users ou ON ou.object_id=o.id "
+                "WHERE ou.user_id=? AND o.is_active=1 ORDER BY o.name",
+                (user_id,)
+            ).fetchall()
+            db.close()
+            return ok(rows_to_list(rows))
     rows = db.execute("SELECT * FROM objects WHERE is_active=1 ORDER BY name").fetchall()
     db.close()
     return ok(rows_to_list(rows))
@@ -400,6 +412,16 @@ def create_report():
         if not d.get(f):
             return err(f'{f} обязателен')
     db = get_db()
+    # Инженер может создавать сводки только по назначенным объектам
+    user = db.execute("SELECT role FROM users WHERE id=?", (d['user_id'],)).fetchone()
+    if user and user['role'] == 'engineer':
+        assigned = db.execute(
+            "SELECT 1 FROM object_users WHERE user_id=? AND object_id=?",
+            (d['user_id'], d['object_id'])
+        ).fetchone()
+        if not assigned:
+            db.close()
+            return err('Объект не назначен инженеру', 403)
     try:
         cur = db.execute(
             "INSERT INTO daily_reports (object_id, user_id, report_date) VALUES (?,?,?)",
