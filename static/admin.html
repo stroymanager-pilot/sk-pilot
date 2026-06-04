@@ -346,7 +346,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
       <button class="modal-close" onclick="closeModal('engineers')">✕</button>
     </div>
     <div class="modal-body">
-      <div id="engineersList" style="margin-bottom:16px"></div>
+      <div id="modalEngineersList" style="margin-bottom:16px"></div>
       <div style="border-top:1px solid var(--border);padding-top:14px">
         <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:10px">Добавить инженера</div>
         <div style="display:flex;gap:8px;align-items:center">
@@ -677,17 +677,17 @@ async function refreshEngineers() {
   const allUsers = state.users.filter(u => u.role !== 'admin');
 
   // Список назначенных
-  const el = document.getElementById('engineersList');
+  const el = document.getElementById('modalEngineersList');
   if (!assigned.length) {
     el.innerHTML = '<div class="empty" style="padding:8px 0">Инженеров нет — добавьте первого</div>';
   } else {
     el.innerHTML = assigned.map(e=>`
       <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
         <div style="flex:1">
-          <div style="font-size:14px;font-weight:600">${esc(e.full_name||e.name||'')}</div>
+          <div style="font-size:14px;font-weight:600">${esc(e.full_name||'')}</div>
           <div style="font-size:12px;color:var(--text3)">${esc(e.role||'')}</div>
         </div>
-        <button class="btn btn-danger btn-xs" onclick="removeEngineerFromObj(${e.id})">✕ Убрать</button>
+        ${e.role !== 'admin' ? `<button class="btn btn-danger btn-xs" onclick="removeEngineerFromObj(${e.id})">✕ Убрать</button>` : ''}
       </div>`).join('');
   }
 
