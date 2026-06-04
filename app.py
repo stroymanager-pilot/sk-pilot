@@ -386,6 +386,20 @@ def assign_user(obj_id):
     except Exception as e:
         db.close(); return err(str(e))
 
+@app.post('/api/objects/<int:obj_id>/unassign_user')
+def unassign_user(obj_id):
+    d = request.json or {}
+    if not d.get('user_id'):
+        return err('user_id обязателен')
+    db = get_db()
+    db.execute(
+        "DELETE FROM object_users WHERE object_id=? AND user_id=?",
+        (obj_id, d['user_id'])
+    )
+    db.commit()
+    db.close()
+    return ok()
+
 # ─────────────────────────────────────────────────────────
 # ЕЖЕДНЕВНЫЕ СВОДКИ
 # ─────────────────────────────────────────────────────────

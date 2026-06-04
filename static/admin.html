@@ -338,6 +338,26 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
   </div>
 </div>
 
+<!-- MODAL ИНЖЕНЕРЫ ОБЪЕКТА -->
+<div class="modal-bg" id="modal-engineers">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-h">
+      <span class="modal-title" id="engineersTitle">Инженеры</span>
+      <button class="modal-close" onclick="closeModal('engineers')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="engineersList" style="margin-bottom:16px"></div>
+      <div style="border-top:1px solid var(--border);padding-top:14px">
+        <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:10px">Добавить инженера</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="newEngineerSel" style="flex:1;font-size:15px"></select>
+          <button class="btn btn-primary" onclick="addEngineerToObj()">+ Добавить</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL ПРОСМОТР СВОДКИ -->
 <div class="modal-bg" id="modal-report">
   <div class="modal" style="max-width:860px;width:95vw">
@@ -503,7 +523,7 @@ async function loadProjects() {
             </div>
             <div class="list-actions">
               <button class="btn btn-ghost btn-xs" onclick="editObject(${o.id},${p.id})">✏</button>
-              <button class="btn btn-ghost btn-xs" onclick="assignEngineerToObject(${o.id})">👷</button>
+              <button class="btn btn-ghost btn-xs" onclick="manageEngineers(${o.id},'${o.name.replace(/'/g,'')}')">👷 Инженеры</button>
               <button class="btn btn-ghost btn-xs" onclick="manageContractors(${o.id},'${o.name.replace(/'/g,'')}')">🏗 Подрядчики</button>
             </div>
           </div>`).join('')
@@ -643,17 +663,65 @@ async function editObject(objId, projId) {
   toast('Объект обновлён','ok'); await init(); loadProjects();
 }
 
-async function assignEngineerToObject(objId) {
-  const obj = state.objects.find(o=>o.id===objId);
-  const engineers = state.users.filter(u=>u.role!=='admin');
-  const list = engineers.map((e,i)=>`${i+1}. ${e.full_name}`).join('\n');
-  const choice = prompt(`Назначить инженера на объект "${obj?.name}":\n${list}\nВведите номер:`);
-  if (!choice) return;
-  const idx = parseInt(choice)-1;
-  if (idx<0||idx>=engineers.length) { toast('Неверный номер','err'); return; }
-  await fetch(`${API}/api/objects/${objId}/assign_user`,{method:'POST',
-    headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:engineers[idx].id})});
-  toast(`${engineers[idx].full_name} назначен на объект`,'ok'); await init(); loadProjects();
+// ── ИНЖЕНЕРЫ ОБЪЕКТА ──
+let _curEngObjId = null;
+async function manageEngineers(objId, objName) {
+  _curEngObjId = objId;
+  document.getElementById('engineersTitle').textContent = `Инженеры · ${objName}`;
+  await refreshEngineers();
+  openModal('engineers');
+}
+async function refreshEngineers() {
+  const res = await fetch(`${API}/api/objects/${_curEngObjId}`).then(r=>r.json());
+  const assigned = res.data?.engineers || [];
+  const allUsers = state.users.filter(u => u.role !== 'admin');
+
+  // Список назначенных
+  const el = document.getElementById('engineersList');
+  if (!assigned.length) {
+    el.innerHTML = '<div class="empty" style="padding:8px 0">Инженеров нет — добавьте первого</div>';
+  } else {
+    el.innerHTML = assigned.map(e=>`
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:600">${esc(e.full_name||e.name||'')}</div>
+          <div style="font-size:12px;color:var(--text3)">${esc(e.role||'')}</div>
+        </div>
+        <button class="btn btn-danger btn-xs" onclick="removeEngineerFromObj(${e.id})">✕ Убрать</button>
+      </div>`).join('');
+  }
+
+  // Выпадающий список незначенных
+  const assignedIds = new Set(assigned.map(e => e.id || e.user_id));
+  const unassigned = allUsers.filter(u => !assignedIds.has(u.id));
+  const sel = document.getElementById('newEngineerSel');
+  if (!unassigned.length) {
+    sel.innerHTML = '<option value="">— все назначены —</option>';
+  } else {
+    sel.innerHTML = '<option value="">— выберите инженера —</option>' +
+      unassigned.map(u=>`<option value="${u.id}">${esc(u.full_name)}</option>`).join('');
+  }
+}
+async function addEngineerToObj() {
+  const userId = document.getElementById('newEngineerSel').value;
+  if (!userId) { toast('Выберите инженера','err'); return; }
+  await fetch(`${API}/api/objects/${_curEngObjId}/assign_user`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({user_id: parseInt(userId)})
+  });
+  await refreshEngineers();
+  await init();
+  toast('Инженер назначен','ok');
+}
+async function removeEngineerFromObj(uid) {
+  if (!confirm('Снять инженера с объекта? Его прошлые сводки останутся в базе.')) return;
+  await fetch(`${API}/api/objects/${_curEngObjId}/unassign_user`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({user_id: uid})
+  });
+  await refreshEngineers();
+  await init();
+  toast('Инженер снят с объекта','ok');
 }
 
 // ── ПАРТНЁРЫ ──
