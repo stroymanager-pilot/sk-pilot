@@ -295,7 +295,8 @@ async function init() {
     // Combine admin sections + my own sections
     S.allSections = [...(S.sections||[]), ...(S.mySections||[])];
     document.getElementById('hTitle').textContent = S.object.name;
-    const todayRep = repList.data?.find(r=>r.report_date===dateStr&&r.user_id===userId);
+    // == (не ===): user_id из JSON — число, userId из sessionStorage — строка
+    const todayRep = repList.data?.find(r=>r.report_date===dateStr&&r.user_id==userId);
     if (todayRep) { S.reportId=todayRep.id; await loadReport(); }
     else {
       try {
@@ -305,7 +306,7 @@ async function init() {
         else {
           // Сводка уже есть (race condition) — ищем снова
           const rep2 = await fetch(`${API}/api/objects/${S.objectId}/reports`).then(r=>r.json());
-          const found = rep2.data?.find(r=>r.report_date===dateStr&&r.user_id===userId);
+          const found = rep2.data?.find(r=>r.report_date===dateStr&&r.user_id==userId);
           if (found) { S.reportId=found.id; await loadReport(); }
         }
       } catch(createErr) {
@@ -415,10 +416,12 @@ function updatePills() {
 }
 
 function showStep(i) {
+  saveDraftFormFields();   // запомнить введённое перед перерисовкой
   currentStep=i;
   const step=STEPS[i];
   document.getElementById('main').innerHTML=renderStep(step.id);
   if(step.id==='meeting') restoreMeetingFields();
+  restoreDraftFormFields(step.id);  // восстановить черновик
   updatePills();
   document.getElementById('pill-'+i)?.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});
   window.scrollTo(0,0);
@@ -430,6 +433,39 @@ async function autoSave() {
   const id=STEPS[currentStep].id;
   if(id==='personnel'&&!S.isReadonly) await saveAllPersonnel(true);
   if(id==='meeting'&&!S.isReadonly) await saveMeeting(true);
+}
+
+// ── FORM DRAFT CACHE — не теряем введённое при смене вкладки ──
+const _formDrafts = {};
+const _draftFields = {
+  input: ['icMat','icQty','icDoc','icSec','icCon','icStatus','icDev'],
+  oc:    ['ocStage','ocOps','ocMethod','ocSec','ocStageCon','ocSec_status','ocSec_dev'],
+  ac:    ['acStage','acOps','acMethod','acSec','acStageCon','acSec_status','acSec_dev'],
+};
+function saveDraftFormFields() {
+  const stepId = STEPS[currentStep]?.id;
+  const fields = _draftFields[stepId];
+  if (!fields) return;
+  const draft = {};
+  let hasContent = false;
+  for (const id of fields) {
+    const el = document.getElementById(id);
+    if (el) { draft[id] = el.value; if (el.value) hasContent = true; }
+  }
+  if (hasContent) _formDrafts[stepId] = draft;
+}
+function restoreDraftFormFields(stepId) {
+  const draft = _formDrafts[stepId];
+  if (!draft) return;
+  for (const [id, val] of Object.entries(draft)) {
+    const el = document.getElementById(id);
+    if (!el || !val) continue;
+    el.value = val;
+    // показываем строку с замечанием если статус выбран
+    if (id==='icStatus') { const r=document.getElementById('icDevRow'); if(r) r.style.display=val?'block':'none'; }
+    if (id==='ocSec_status') { const r=document.getElementById('ocSec_devrow'); if(r) r.style.display=val?'block':'none'; }
+    if (id==='acSec_status') { const r=document.getElementById('acSec_devrow'); if(r) r.style.display=val?'block':'none'; }
+  }
 }
 
 // ── READONLY BANNER ──
@@ -661,7 +697,7 @@ async function saveIC() {
         contractor_id:document.getElementById('icCon')?.value||null,
         deviation_note:document.getElementById('icStatus').value?document.getElementById('icDev').value:'',
         engineer_id:userId})}).then(r=>r.json());
-    S.inputControl.push(r.data); toast('Добавлено','ok'); showStep(currentStep);
+    S.inputControl.push(r.data); delete _formDrafts['input']; toast('Добавлено','ok'); showStep(currentStep);
   } catch(e) { toast('Ошибка: '+e.message,'err'); } finally { setSaving(false); }
 }
 
@@ -747,7 +783,7 @@ async function saveOC() {
         engineer_id:userId})});
     const r=await fetch(`${API}/api/reports/${S.reportId}`).then(r=>r.json());
     if(S.report)S.report.operational_control=r.data.operational_control;
-    toast('Сохранено','ok'); showStep(currentStep);
+    delete _formDrafts['oc']; toast('Сохранено','ok'); showStep(currentStep);
   } catch(e) { toast('Ошибка: '+e.message,'err'); } finally { setSaving(false); }
 }
 async function deleteOC(id) {
@@ -772,7 +808,7 @@ async function saveAC() {
         contractor_id:document.getElementById('acStageCon')?.value||null,
         status:acStatusEl?.value||'',deviation_note:acStatusEl?.value&&acDevEl?acDevEl.value:'',
         engineer_id:userId})}).then(r=>r.json());
-    S.acceptanceControl.push(r.data); toast('Сохранено','ok'); showStep(currentStep);
+    S.acceptanceControl.push(r.data); delete _formDrafts['ac']; toast('Сохранено','ok'); showStep(currentStep);
   } catch(e) { toast('Ошибка: '+e.message,'err'); } finally { setSaving(false); }
 }
 async function deleteAC(id) {
