@@ -329,6 +329,25 @@ async function init() {
     }
     const userObjs = objRes.data || [];
     if (!userObjs.length) {
+      // Нет объектов — проверить, есть ли доступ к реестру (senior + can_view_all)
+      if (userRole === 'senior') {
+        const uRes = await fetch(`${API}/api/users/${userId}`).then(r=>r.json());
+        if (uRes.data?.can_view_all) {
+          // Показываем кнопку реестра и дружелюбный экран вместо тупика
+          document.getElementById('btnRegistry').style.display = '';
+          document.getElementById('btnBack').style.display = 'none';
+          document.getElementById('btnNext').style.display = 'none';
+          document.getElementById('main').innerHTML = `<div class="card">
+            <div class="card-h"><div class="ico">📊</div>Просмотр реестра</div>
+            <div style="padding:12px 0;color:var(--text2);font-size:14px">
+              Объектов для ведения сводок не назначено.<br>
+              Доступен <strong>просмотр всех сводок</strong> в реестре.
+            </div>
+            <button class="btn-p" style="margin-top:8px" onclick="openRegistry()">📊 Открыть реестр</button>
+          </div>`;
+          return;
+        }
+      }
       document.getElementById('main').innerHTML='<div class="card"><div style="padding:20px;text-align:center;color:var(--red)"><strong>Нет назначенных объектов</strong><br><br>Обратитесь к администратору.</div></div>';
       return;
     }
