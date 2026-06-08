@@ -66,6 +66,7 @@ def auto_migrate():
         ("ALTER TABLE ks2_check ADD COLUMN engineer_id INTEGER", "ks2_check.engineer_id"),
         ("ALTER TABLE meetings ADD COLUMN protocol_path TEXT", "meetings.protocol_path2"),
         ("ALTER TABLE users ADD COLUMN is_active INTEGER DEFAULT 1", "users.is_active"),
+        ("ALTER TABLE users ADD COLUMN can_view_all INTEGER DEFAULT 0", "users.can_view_all"),
         ("ALTER TABLE partners ADD COLUMN project_id INTEGER", "partners.project_id"),
         ("ALTER TABLE operational_control ADD COLUMN contractor_id INTEGER", "operational_control.contractor_id"),
         ("ALTER TABLE acceptance_control ADD COLUMN contractor_id INTEGER", "acceptance_control.contractor_id"),
@@ -336,11 +337,19 @@ def list_users():
     db.close()
     return ok(rows_to_list(rows))
 
+@app.get('/api/users/<int:user_id>')
+def get_user(user_id):
+    db = get_db()
+    row = db.execute("SELECT id, full_name, email, role, is_active, can_view_all FROM users WHERE id=?", (user_id,)).fetchone()
+    db.close()
+    if not row: return err('Пользователь не найден', 404)
+    return ok(dict(row))
+
 @app.patch('/api/users/<int:user_id>')
 def update_user(user_id):
     d = request.json or {}
     db = get_db()
-    allowed = ['full_name', 'email', 'role', 'is_active']
+    allowed = ['full_name', 'email', 'role', 'is_active', 'can_view_all']
     updates = {k: v for k, v in d.items() if k in allowed}
     if updates:
         sql = ', '.join(f"{k}=?" for k in updates)
@@ -1164,9 +1173,17 @@ def my_reports():
 @app.get('/api/all_reports')
 def all_reports():
     db = get_db()
+    requester_id = request.args.get('requester_id')
     project_id = request.args.get('project_id')
     object_id = request.args.get('object_id')
     user_id = request.args.get('user_id')
+    # Проверка прав: admin или senior с can_view_all=1
+    if requester_id:
+        req = db.execute("SELECT role, can_view_all FROM users WHERE id=?", (requester_id,)).fetchone()
+        if not req or (req['role'] not in ('admin',) and not (req['role']=='senior' and req['can_view_all'])):
+            db.close(); return err('Доступ запрещён', 403)
+    else:
+        db.close(); return err('Доступ запрещён', 403)
     query = """
         SELECT dr.*, u.full_name as engineer_name,
                COALESCE(u.is_active,1) as engineer_active,
@@ -1391,10 +1408,18 @@ def _export_zip_inner(db, user_id, project_id):
 
 @app.get('/api/all_photos')
 def all_photos():
-    """Все фото — только для Админа"""
+    """Все фото — для admin или senior с can_view_all=1"""
     db = get_db()
+    requester_id = request.args.get('requester_id')
     project_id = request.args.get('project_id')
     object_id = request.args.get('object_id')
+    # Проверка прав: admin или senior с can_view_all=1
+    if requester_id:
+        req = db.execute("SELECT role, can_view_all FROM users WHERE id=?", (requester_id,)).fetchone()
+        if not req or (req['role'] not in ('admin',) and not (req['role']=='senior' and req['can_view_all'])):
+            db.close(); return err('Доступ запрещён', 403)
+    else:
+        db.close(); return err('Доступ запрещён', 403)
     query = """
         SELECT ph.*, u.full_name as engineer_name,
                o.name as object_name, dr.report_date

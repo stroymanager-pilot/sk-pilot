@@ -156,6 +156,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
     <div class="hdr-right">
       <div class="sync-dot" id="syncDot"></div>
       <div class="status-pill" id="hStatus">черновик</div>
+      <button class="history-btn" id="btnRegistry" style="display:none" onclick="openRegistry()">📊 Реестр</button>
       <button class="history-btn" onclick="openHistory()">📋</button>
       <button class="logout-btn" onclick="logout()">Выход</button>
     </div>
@@ -190,6 +191,17 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
       <button class="modal-close" onclick="closeModal('past-report')" style="font-size:18px;line-height:1;padding:4px 8px">✕</button>
     </div>
     <div class="modal-body" id="pastReportBody"></div>
+  </div>
+</div>
+
+<!-- MODAL: Реестр сводок (только для senior с can_view_all) -->
+<div class="modal-bg" id="modal-registry" onclick="if(event.target===this)closeModal('registry')">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-h">
+      <span class="modal-title">Реестр сводок</span>
+      <button class="modal-close" onclick="closeModal('registry')" style="font-size:18px;line-height:1;padding:4px 8px">✕</button>
+    </div>
+    <div class="modal-body" id="registryBody"><div class="empty">Загрузка...</div></div>
   </div>
 </div>
 
@@ -247,6 +259,45 @@ function esc(v){if(v==null)return '';return String(v).replace(/`/g,'\\`').replac
 
 window._prows = [];
 let _meetingData = {day:'',loc:'',time:'',part:'',agenda:''};
+
+// ── РЕЕСТР (только senior с can_view_all=1) ──
+async function checkRegistryAccess() {
+  if (userRole !== 'senior') return;
+  try {
+    const r = await fetch(`${API}/api/users/${userId}`).then(r=>r.json());
+    if (r.data?.can_view_all) {
+      document.getElementById('btnRegistry').style.display = '';
+    }
+  } catch(e) {}
+}
+
+async function openRegistry() {
+  openModal('registry');
+  document.getElementById('registryBody').innerHTML = '<div class="empty">Загрузка...</div>';
+  try {
+    const res = await fetch(`${API}/api/all_reports?requester_id=${userId}`).then(r=>r.json());
+    if (!res.ok) { document.getElementById('registryBody').innerHTML='<div class="empty" style="color:var(--red)">Нет доступа</div>'; return; }
+    const reports = res.data || [];
+    if (!reports.length) { document.getElementById('registryBody').innerHTML='<div class="empty">Сводок нет</div>'; return; }
+    document.getElementById('registryBody').innerHTML = `
+      <p style="font-size:12px;color:var(--text3);margin-bottom:12px">Просмотр всех сводок · ${reports.length} записей</p>
+      ${reports.map(r=>{
+        const p=r.report_date.split('-'); const dateF=p[2]+'.'+p[1]+'.'+p[0];
+        const isSubmitted=r.status==='submitted';
+        return `<div style="padding:10px 0;border-bottom:1px solid var(--surface2)">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div>
+              <div style="font-size:14px;font-weight:600;color:var(--navy)">${esc(r.engineer_name)}</div>
+              <div style="font-size:12px;color:var(--text3)">${esc(r.object_name)||'—'} · ${dateF}</div>
+            </div>
+            <span style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;${isSubmitted?'background:var(--green-pale);color:var(--green)':'background:var(--amber-pale);color:var(--amber)'}">${isSubmitted?'Сдана':'Черновик'}</span>
+          </div>
+        </div>`;
+      }).join('')}`;
+  } catch(e) {
+    document.getElementById('registryBody').innerHTML='<div class="empty" style="color:var(--red)">Ошибка загрузки</div>';
+  }
+}
 
 function fmtDate(d){if(!d)return'—';if(/^\d{8}$/.test(d))return d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6,8);return d;}
 function toast(msg,type=''){const t=document.getElementById('toast');t.textContent=msg;t.className='toast show '+type;setTimeout(()=>t.className='toast',2800);}
@@ -326,6 +377,7 @@ async function init() {
     loadMeetingDefaults();
     buildNav();
     showStep(0);
+    checkRegistryAccess();
   } catch(e) {
     console.error(e);
     document.getElementById('main').innerHTML='<div class="card"><div style="padding:20px;color:var(--red)"><strong>Ошибка подключения</strong><br><br><code style="font-family:var(--mono);background:var(--surface);padding:4px 8px;border-radius:4px;font-size:13px">https://sk.stroymanager.ru</code></div></div>';

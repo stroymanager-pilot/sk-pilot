@@ -476,7 +476,7 @@ async function loadDashboard() {
   document.getElementById('statObjects').textContent = state.objects.length;
   document.getElementById('statEngineers').textContent = state.users.filter(u=>u.role!=='admin' && u.is_active!==0).length;
 
-  const rep = await fetch(`${API}/api/all_reports`).then(r=>r.json());
+  const rep = await fetch(`${API}/api/all_reports?requester_id=${userId}`).then(r=>r.json());
   const all = rep.data || [];
   const todayReps = all.filter(r=>r.report_date===today);
   document.getElementById('statReports').textContent = todayReps.length;
@@ -853,6 +853,9 @@ async function loadEngineers() {
       </div>
       <div class="list-actions" style="align-items:center">
         <span class="badge ${badgeClass}">${roleLabel}</span>
+        ${u.role==='senior'?`<label title="Полный просмотр всех сводок и фото" style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text2);cursor:pointer;margin-top:4px;white-space:nowrap">
+          <input type="checkbox" ${u.can_view_all?'checked':''} onchange="toggleViewAll(${u.id},this.checked)"> Весь реестр
+        </label>`:''}
         ${u.role!=='admin'?`
         ${isActive?`<button class="btn btn-ghost btn-xs" onclick="editEngineer(${u.id})" title="Редактировать">✏</button>`:''}
         ${isActive
@@ -899,6 +902,14 @@ async function activateEngineer(id) {
   toast('Инженер восстановлен','ok'); await init(); loadEngineers();
 }
 
+async function toggleViewAll(id, enabled) {
+  await fetch(`${API}/api/users/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({can_view_all: enabled ? 1 : 0})});
+  const u = state.users.find(u=>u.id===id);
+  if (u) u.can_view_all = enabled ? 1 : 0;
+  toast(enabled ? 'Полный просмотр включён' : 'Полный просмотр отключён', 'ok');
+}
+
 async function saveEngineer() {
   const id = document.getElementById('editEngId').value;
   const name = document.getElementById('engName').value.trim();
@@ -927,10 +938,10 @@ async function saveEngineer() {
 // ── ВСЕ СВОДКИ ──
 async function loadAllReports() {
   const projId = document.getElementById('filterProject').value;
-  const userId = document.getElementById('filterEngineer').value;
-  let url = `${API}/api/all_reports?`;
-  if (projId) url += `project_id=${projId}&`;
-  if (userId) url += `user_id=${userId}&`;
+  const filterUserId = document.getElementById('filterEngineer').value;
+  let url = `${API}/api/all_reports?requester_id=${userId}`;
+  if (projId) url += `&project_id=${projId}`;
+  if (filterUserId) url += `&user_id=${filterUserId}`;
   const res = await fetch(url).then(r=>r.json());
   let reports = res.data || [];
   const status = document.getElementById('filterStatus').value;
@@ -1070,8 +1081,8 @@ async function loadAllPhotos() {
     });
   }
   const projId = fpEl.value;
-  let url = `${API}/api/all_photos?`;
-  if (projId) url += `project_id=${projId}`;
+  let url = `${API}/api/all_photos?requester_id=${userId}`;
+  if (projId) url += `&project_id=${projId}`;
   const res = await fetch(url).then(r=>r.json());
   const photos = res.data || [];
   document.getElementById('photoStats').textContent = `Всего фотографий: ${photos.length}`;
