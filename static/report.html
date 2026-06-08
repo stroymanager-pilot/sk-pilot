@@ -404,6 +404,8 @@ function updatePills() {
     if(s.id==='remarks') cnt=S.remarks.filter(r=>r.status==='open').length;
     if(s.id==='prescriptions') cnt=S.prescriptions.length;
     if(s.id==='input') cnt=S.inputControl.length;
+    if(s.id==='operational') cnt=(S.report?.operational_control||[]).length;
+    if(s.id==='acceptance') cnt=S.acceptanceControl.length;
     if(s.id==='photos') cnt=S.photos.length;
     if(s.id==='personnel') cnt=S.personnel.filter(p=>p.headcount>0).length;
     if(cnt>0) pill.innerHTML=s.label+`<span class="cnt">${cnt}</span>`;
