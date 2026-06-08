@@ -437,10 +437,17 @@ async function autoSave() {
 
 // ── FORM DRAFT CACHE — не теряем введённое при смене вкладки ──
 const _formDrafts = {};
+// Ключи совпадают с STEPS[i].id
 const _draftFields = {
-  input: ['icMat','icQty','icDoc','icSec','icCon','icStatus','icDev'],
-  oc:    ['ocStage','ocOps','ocMethod','ocSec','ocStageCon','ocSec_status','ocSec_dev'],
-  ac:    ['acStage','acOps','acMethod','acSec','acStageCon','acSec_status','acSec_dev'],
+  input:       ['icMat','icQty','icDoc','icSec','icCon','icStatus','icDev'],
+  operational: ['ocStage','ocOps','ocMethod','ocSec','ocStageCon','ocSec_status','ocSec_dev'],
+  acceptance:  ['acStage','acOps','acMethod','acSec','acStageCon','acSec_status','acSec_dev'],
+  ks2:         ['ks2Con','ks2Work','ks2Num','ks2Num3'],
+  // чекбоксы КС-2 хранятся под отдельным ключом _cb
+  prescriptions: ['preNum','preDate','preDeadline','preSec','preStatus','preTjId'],
+};
+const _draftCheckboxes = {
+  ks2: ['ks2Ks6a','ks2Id'],
 };
 function saveDraftFormFields() {
   const stepId = STEPS[currentStep]?.id;
@@ -452,16 +459,26 @@ function saveDraftFormFields() {
     const el = document.getElementById(id);
     if (el) { draft[id] = el.value; if (el.value) hasContent = true; }
   }
+  const cbFields = _draftCheckboxes[stepId] || [];
+  for (const id of cbFields) {
+    const el = document.getElementById(id);
+    if (el) { draft['_cb_'+id] = el.checked; if (el.checked) hasContent = true; }
+  }
   if (hasContent) _formDrafts[stepId] = draft;
 }
 function restoreDraftFormFields(stepId) {
   const draft = _formDrafts[stepId];
   if (!draft) return;
   for (const [id, val] of Object.entries(draft)) {
+    if (id.startsWith('_cb_')) {
+      const el = document.getElementById(id.slice(4));
+      if (el) el.checked = val;
+      continue;
+    }
     const el = document.getElementById(id);
-    if (!el || !val) continue;
+    if (!el || val === undefined) continue;
     el.value = val;
-    // показываем строку с замечанием если статус выбран
+    // показываем строку замечания если статус выбран
     if (id==='icStatus') { const r=document.getElementById('icDevRow'); if(r) r.style.display=val?'block':'none'; }
     if (id==='ocSec_status') { const r=document.getElementById('ocSec_devrow'); if(r) r.style.display=val?'block':'none'; }
     if (id==='acSec_status') { const r=document.getElementById('acSec_devrow'); if(r) r.style.display=val?'block':'none'; }
@@ -783,7 +800,7 @@ async function saveOC() {
         engineer_id:userId})});
     const r=await fetch(`${API}/api/reports/${S.reportId}`).then(r=>r.json());
     if(S.report)S.report.operational_control=r.data.operational_control;
-    delete _formDrafts['oc']; toast('Сохранено','ok'); showStep(currentStep);
+    delete _formDrafts['operational']; toast('Сохранено','ok'); showStep(currentStep);
   } catch(e) { toast('Ошибка: '+e.message,'err'); } finally { setSaving(false); }
 }
 async function deleteOC(id) {
@@ -808,7 +825,7 @@ async function saveAC() {
         contractor_id:document.getElementById('acStageCon')?.value||null,
         status:acStatusEl?.value||'',deviation_note:acStatusEl?.value&&acDevEl?acDevEl.value:'',
         engineer_id:userId})}).then(r=>r.json());
-    S.acceptanceControl.push(r.data); delete _formDrafts['ac']; toast('Сохранено','ok'); showStep(currentStep);
+    S.acceptanceControl.push(r.data); delete _formDrafts['acceptance']; toast('Сохранено','ok'); showStep(currentStep);
   } catch(e) { toast('Ошибка: '+e.message,'err'); } finally { setSaving(false); }
 }
 async function deleteAC(id) {
@@ -926,7 +943,7 @@ async function savePrescription() {
         deadline:document.getElementById('preDeadline').value||null,status:document.getElementById('preStatus').value,
         section_id:document.getElementById('preSec').value,tj_prescription_id:document.getElementById('preTjId').value||null})});
     const r=await fetch(`${API}/api/reports/${S.reportId}`).then(r=>r.json());
-    S.prescriptions=r.data.prescriptions_log||[]; toast('Добавлено','ok'); showStep(currentStep);
+    S.prescriptions=r.data.prescriptions_log||[]; delete _formDrafts['prescriptions']; toast('Добавлено','ok'); showStep(currentStep);
   } catch(e) { toast('Ошибка: '+e.message,'err'); } finally { setSaving(false); }
 }
 async function deletePre(id) {
@@ -1008,7 +1025,7 @@ async function saveKS2() {
         has_ks3:document.getElementById('ks2Num3').value?1:0,
         has_ks6a:document.getElementById('ks2Ks6a').checked,
         has_id:document.getElementById('ks2Id').checked,engineer_id:userId})}).then(r=>r.json());
-    S.ks2Check.push(r.data); toast('Добавлено','ok'); showStep(currentStep);
+    S.ks2Check.push(r.data); delete _formDrafts['ks2']; toast('Добавлено','ok'); showStep(currentStep);
   } catch(e) { toast('Ошибка: '+e.message,'err'); } finally { setSaving(false); }
 }
 async function deleteKS2(id) {
