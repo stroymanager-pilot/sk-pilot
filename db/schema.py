@@ -1,3 +1,6 @@
+# SK-pilot (СК-пилот) — система ежедневных сводок строительного контроля.
+# Автор: Vladislav Nikonenko (идея и разработка). © 2026. Версия 1.3.
+
 import sqlite3, os
 
 # На Render используем persistent disk /var/data; локально — папка db/

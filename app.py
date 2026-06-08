@@ -1,6 +1,7 @@
-# Сводка инженера СК — Daily Report System
-# Создан: Vlad Nikonenko & Claude (Anthropic)
-# https://sk-pilot.onrender.com
+# SK-pilot (СК-пилот) — система ежедневных сводок строительного контроля.
+# Автор: Vladislav Nikonenko (идея и разработка). © 2026. Версия 1.3.
+
+APP_VERSION = '1.3'
 
 from flask import Flask, request, jsonify, send_from_directory, send_file
 from flask_cors import CORS
