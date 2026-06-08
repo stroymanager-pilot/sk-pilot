@@ -1203,6 +1203,8 @@ def export_zip():
         return _export_zip_inner(db, user_id, project_id)
     except Exception as e:
         return err(f'Ошибка экспорта: {traceback.format_exc()}', 500)
+    finally:
+        db.close()
 
 def _export_zip_inner(db, user_id, project_id):
     import zipfile, io, csv, os
@@ -1234,7 +1236,7 @@ def _export_zip_inner(db, user_id, project_id):
     pparams = []
     if project_id: pq += " AND o.project_id=?"; pparams.append(project_id)
     photos = db.execute(pq, pparams).fetchall()
-    db.close()
+    # db will be closed by the caller (export_zip finally block)
 
     UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
 
