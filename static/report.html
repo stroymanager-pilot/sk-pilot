@@ -136,6 +136,9 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 /* READONLY OVERLAY */
 .readonly-banner{background:var(--green-pale);border:1px solid var(--green);border-radius:var(--r-sm);padding:10px 14px;margin-bottom:14px;font-size:13px;color:var(--green);font-weight:600}
 .empty{text-align:center;padding:28px;color:var(--text3);font-size:13px}
+/* Плейсхолдеры — светло-серые, заметно бледнее введённого текста */
+::placeholder{color:var(--text3);opacity:.7}
+::-webkit-input-placeholder{color:var(--text3);opacity:.7}
 </style>
 </head>
 <body>
@@ -224,8 +227,8 @@ document.getElementById('hSub').textContent = userName + ' · ' + today.toLocale
 const STEPS = [
   {id:'info', label:'Объект', ico:'🏗'},
   {id:'personnel', label:'Персонал', ico:'👷'},
-  {id:'input', label:'Вх.контроль', ico:'📦'},
-  {id:'operational', label:'Операц.', ico:'🔍'},
+  {id:'input', label:'Входной', ico:'📦'},
+  {id:'operational', label:'Операционный', ico:'🔍'},
   {id:'acceptance', label:'Приёмочный', ico:'✅'},
   {id:'remarks', label:'Замечания', ico:'⚠️'},
   {id:'prescriptions', label:'Предписания', ico:'📋'},
@@ -495,9 +498,11 @@ function renderInfo() {
   const o=S.object;
   return `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-      <div><div style="font-size:19px;font-weight:800;color:var(--navy)">Объект</div>
-      <div style="font-size:13px;color:var(--text3)">Информация и статус сводки</div></div>
-      <button class="btn-sm-i" onclick="openModal('sections')">⚙ Участки</button>
+      <div style="font-size:19px;font-weight:800;color:var(--navy)">Объект</div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+        <button class="btn-p" style="padding:8px 14px;font-size:13px" onclick="openModal('sections')">⚙ Участки</button>
+        <span style="font-size:11px;color:var(--text3)">Инженер добавляет участки сам</span>
+      </div>
     </div>
     <div class="card">
       <div class="card-h"><div class="ico">🏗</div>Сводка</div>
@@ -600,7 +605,7 @@ function renderPersonnel() {
       </div>`).join('')||'<div class="empty">Нет данных</div>'}
     </div>`;
   return `
-    <div style="font-size:19px;font-weight:800;color:var(--navy);margin-bottom:4px">Персонал</div>
+    <div style="font-size:19px;font-weight:800;color:var(--navy);margin-bottom:4px">Подрядчики и численность</div>
     <div style="font-size:13px;color:var(--text3);margin-bottom:14px">Численность и работы. Строки с 0 не сохраняются.${hidden.length?` <span style="color:var(--green)">${hidden.length} скрыто</span>`:''}</div>
     <div class="card">
       <div class="card-h"><div class="ico">👷</div>Численность</div>
@@ -654,15 +659,15 @@ async function saveAllPersonnel(silent=false) {
 function renderInput() {
   return `
     <div style="font-size:19px;font-weight:800;color:var(--navy);margin-bottom:4px">Входной контроль</div>
-    <div style="font-size:13px;color:var(--text3);margin-bottom:14px">Материалы на объекте, проверка документов качества</div>
+    <div style="font-size:13px;color:var(--text3);margin-bottom:14px">Материалы и документы качества</div>
     ${S.isReadonly?'<div class="readonly-banner">✅ Сводка сдана — редактирование недоступно</div>':''}
     ${!S.isReadonly?`<div class="card">
       <div class="card-h"><div class="ico">📦</div>Добавить материал</div>
       <div class="new-form">
         <label class="fl no-mt">Наименование материала / конструкции</label>
-        <textarea id="icMat" placeholder="Бетон М300, ГОСТ 26633-2015; Поставка свай ж/б..." style="min-height:64px;resize:vertical;font-size:14px;width:100%"></textarea>
+        <textarea id="icMat" placeholder="Вид материалов" style="min-height:64px;resize:vertical;font-size:14px;width:100%"></textarea>
         <div class="row2" style="margin-top:8px">
-          <div><label class="fl no-mt">Количество</label><input id="icQty" placeholder="15 м³" style="font-size:14px"></div>
+          <div><label class="fl no-mt">Количество</label><input id="icQty" placeholder="0" style="font-size:14px"></div>
           <div><label class="fl no-mt">Участок</label><select id="icSec">${sectionOpts()}</select></div>
         </div>
         <label class="fl">Подрядчик</label>
@@ -670,8 +675,8 @@ function renderInput() {
           <option value="">— выберите подрядчика —</option>
           ${(S.contractors||[]).filter(c=>c.is_active).map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}
         </select>
-        <label class="fl">Наименование сопроводительного документа</label>
-        <textarea id="icDoc" placeholder="Паспорт качества № 123; Журнал верификации № 1..." style="min-height:52px;resize:vertical;font-size:14px;width:100%"></textarea>
+        <label class="fl">Документ о качестве</label>
+        <textarea id="icDoc" placeholder="Паспорт качества, накладная, сертификат..." style="min-height:52px;resize:vertical;font-size:14px;width:100%"></textarea>
         <div class="row2">
           <div><label class="fl">Статус</label>
             <select id="icStatus" onchange="document.getElementById('icDevRow').style.display=this.value?'block':'none'">
@@ -1044,6 +1049,8 @@ function loadMeetingDefaults() {
   if(!_meetingData.date&&d.date) _meetingData.date=d.date;
   // Переносим вопросы из предыдущей сводки если текущее совещание ещё не заполнено
   if(!_meetingData.agenda&&d.agenda) _meetingData.agenda=d.agenda;
+  // Место по умолчанию — если не заполнено ни из БД, ни из localStorage
+  if(!_meetingData.loc) _meetingData.loc='Строительная площадка';
 }
 function formatMeetingDate(d) {
   if(!d) return '—';
