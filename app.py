@@ -333,7 +333,7 @@ def update_contractor(c_id):
 @app.get('/api/users')
 def list_users():
     db = get_db()
-    rows = db.execute("SELECT id, full_name, email, role, tj_user_id, COALESCE(is_active,1) as is_active FROM users ORDER BY full_name").fetchall()
+    rows = db.execute("SELECT id, full_name, email, role, tj_user_id, COALESCE(is_active,1) as is_active, COALESCE(can_view_all,0) as can_view_all FROM users ORDER BY full_name").fetchall()
     db.close()
     return ok(rows_to_list(rows))
 
@@ -436,9 +436,9 @@ def create_report():
         if not d.get(f):
             return err(f'{f} обязателен')
     db = get_db()
-    # Инженер может создавать сводки только по назначенным объектам
+    # Инженер и главный инженер (senior) могут создавать сводки только по назначенным объектам
     user = db.execute("SELECT role FROM users WHERE id=?", (d['user_id'],)).fetchone()
-    if user and user['role'] == 'engineer':
+    if user and user['role'] in ('engineer', 'senior'):
         assigned = db.execute(
             "SELECT 1 FROM object_users WHERE user_id=? AND object_id=?",
             (d['user_id'], d['object_id'])

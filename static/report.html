@@ -276,7 +276,7 @@ async function openRegistry() {
   document.getElementById('registryBody').innerHTML = '<div class="empty">Загрузка...</div>';
   try {
     const res = await fetch(`${API}/api/all_reports?requester_id=${userId}`).then(r=>r.json());
-    if (!res.ok) { document.getElementById('registryBody').innerHTML='<div class="empty" style="color:var(--red)">Нет доступа</div>'; return; }
+    if (!res.ok) { document.getElementById('registryBody').innerHTML=`<div class="empty" style="color:var(--red)">Доступ закрыт (${res.error||403})<br><span style="font-size:11px">Попросите администратора включить «Реестр: вкл»</span></div>`; return; }
     const reports = res.data || [];
     if (!reports.length) { document.getElementById('registryBody').innerHTML='<div class="empty">Сводок нет</div>'; return; }
     document.getElementById('registryBody').innerHTML = `

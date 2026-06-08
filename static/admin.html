@@ -853,8 +853,8 @@ async function loadEngineers() {
       </div>
       <div class="list-actions" style="align-items:center">
         <span class="badge ${badgeClass}">${roleLabel}</span>
-        ${u.role==='senior'?`<label title="Полный просмотр всех сводок и фото" style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text2);cursor:pointer;margin-top:4px;white-space:nowrap">
-          <input type="checkbox" ${u.can_view_all?'checked':''} onchange="toggleViewAll(${u.id},this.checked)"> Весь реестр
+        ${u.role==='senior'?`<label id="viewAllLabel-${u.id}" title="Полный просмотр всех сводок и фото" style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;margin-top:5px;padding:3px 8px;border-radius:6px;${u.can_view_all?'background:#e4f2ec;color:#3a8c5c;font-weight:700':'background:#f0f3f9;color:#8098b8'}">
+          <input type="checkbox" ${u.can_view_all?'checked':''} onchange="toggleViewAll(${u.id},this.checked)" style="cursor:pointer"><span id="viewAllTxt-${u.id}">${u.can_view_all?'Реестр: вкл':'Реестр: выкл'}</span>
         </label>`:''}
         ${u.role!=='admin'?`
         ${isActive?`<button class="btn btn-ghost btn-xs" onclick="editEngineer(${u.id})" title="Редактировать">✏</button>`:''}
@@ -907,6 +907,15 @@ async function toggleViewAll(id, enabled) {
     body:JSON.stringify({can_view_all: enabled ? 1 : 0})});
   const u = state.users.find(u=>u.id===id);
   if (u) u.can_view_all = enabled ? 1 : 0;
+  // Обновить вид лейбла без перезагрузки страницы
+  const lbl = document.getElementById(`viewAllLabel-${id}`);
+  if (lbl) {
+    lbl.style.background = enabled ? '#e4f2ec' : '#f0f3f9';
+    lbl.style.color = enabled ? '#3a8c5c' : '#8098b8';
+    lbl.style.fontWeight = enabled ? '700' : '';
+  }
+  const txt = document.getElementById(`viewAllTxt-${id}`);
+  if (txt) txt.textContent = enabled ? 'Реестр: вкл' : 'Реестр: выкл';
   toast(enabled ? 'Полный просмотр включён' : 'Полный просмотр отключён', 'ok');
 }
 
