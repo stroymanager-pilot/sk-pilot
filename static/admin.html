@@ -97,11 +97,6 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 .photo-admin-meta{font-size:10px;color:var(--text3);margin-top:2px;}
 .photo-admin-del{width:100%;margin-top:6px;padding:4px;background:var(--red-pale);border:none;border-radius:4px;color:var(--red);font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);}
 .photo-admin-del:hover{background:var(--red);color:#fff;}
-.photo-admin{position:relative;}
-.photo-cb-wrap{position:absolute;top:6px;left:6px;z-index:10;}
-.photo-cb-wrap input[type=checkbox]{width:18px;height:18px;cursor:pointer;accent-color:var(--gold);}
-.photo-admin.ph-selected{outline:3px solid var(--gold);outline-offset:-2px;}
-.bulk-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);margin-bottom:12px;}
 .photo-admin img{cursor:zoom-in;}
 /* LIGHTBOX */
 #lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:14px;}
@@ -224,12 +219,6 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
   <div class="page-d">Просмотр, скачивание и удаление фотографий</div>
   <div class="filters">
     <select id="filterPhotoProject" onchange="loadAllPhotos()"><option value="">Все проекты</option></select>
-  </div>
-  <div class="bulk-bar" id="bulkBar" style="display:none">
-    <span id="bulkCount" style="font-size:13px;font-weight:600;color:var(--text2)">Выбрано: 0</span>
-    <button class="btn btn-ghost btn-xs" onclick="bulkSelectAll()">Выбрать все</button>
-    <button class="btn btn-ghost btn-xs" onclick="bulkClearAll()">Снять выделение</button>
-    <button id="bulkDeleteBtn" class="btn btn-danger btn-xs" onclick="bulkDeleteSelected()" disabled>🗑 Удалить выбранные (0)</button>
   </div>
   <div id="photoStats" style="margin-bottom:12px;font-size:13px;color:var(--text3)"></div>
   <div class="photo-grid-admin" id="photoGridAdmin"></div>
@@ -1110,13 +1099,8 @@ async function loadAllPhotos() {
   const empty = document.getElementById('photoEmpty');
   if (!photos.length) { grid.innerHTML=''; empty.style.display='block'; return; }
   empty.style.display='none';
-  document.getElementById('bulkBar').style.display='flex';
-  bulkClearAll();
   grid.innerHTML = photos.map(p=>`
     <div class="photo-admin" id="ph-${p.id}">
-      <div class="photo-cb-wrap">
-        <input type="checkbox" data-phid="${p.id}" onclick="event.stopPropagation();togglePhotoSelect(${p.id},this.checked)">
-      </div>
       <img src="${API}/uploads/${p.file_path}" data-lb="1"
         data-cap="${(p.caption||'Без подписи').replace(/"/g,'&quot;')}"
         data-meta="${((p.engineer_name||'—')+' · '+(p.report_date||'—')+' · '+(p.object_name||'—')).replace(/"/g,'&quot;')}"
@@ -1138,74 +1122,7 @@ async function deletePhoto(id) {
   if (!confirm('Удалить фото? Это действие нельзя отменить.')) return;
   await fetch(`${API}/api/photos/${id}`,{method:'DELETE'});
   document.getElementById('ph-'+id)?.remove();
-  updatePhotoCount();
   toast('Фото удалено','ok');
-}
-
-// ── МАССОВОЕ УДАЛЕНИЕ ──
-const _selPhotos = new Set();
-
-function togglePhotoSelect(id, checked) {
-  if (checked) _selPhotos.add(id); else _selPhotos.delete(id);
-  const card = document.getElementById('ph-'+id);
-  if (card) card.classList.toggle('ph-selected', checked);
-  updateBulkBar();
-}
-
-function updateBulkBar() {
-  const n = _selPhotos.size;
-  document.getElementById('bulkCount').textContent = `Выбрано: ${n}`;
-  const btn = document.getElementById('bulkDeleteBtn');
-  btn.textContent = `🗑 Удалить выбранные (${n})`;
-  btn.disabled = n === 0;
-}
-
-function bulkSelectAll() {
-  document.querySelectorAll('#photoGridAdmin input[type=checkbox]').forEach(cb => {
-    const id = parseInt(cb.dataset.phid);
-    cb.checked = true;
-    _selPhotos.add(id);
-    document.getElementById('ph-'+id)?.classList.add('ph-selected');
-  });
-  updateBulkBar();
-}
-
-function bulkClearAll() {
-  _selPhotos.clear();
-  document.querySelectorAll('#photoGridAdmin input[type=checkbox]').forEach(cb => {
-    cb.checked = false;
-    const id = parseInt(cb.dataset.phid);
-    document.getElementById('ph-'+id)?.classList.remove('ph-selected');
-  });
-  updateBulkBar();
-}
-
-async function bulkDeleteSelected() {
-  const ids = [..._selPhotos];
-  if (!ids.length) return;
-  if (!confirm(`Удалить выбранные фото (${ids.length} шт.)? Действие нельзя отменить.`)) return;
-  let ok = 0, fail = 0;
-  for (const id of ids) {
-    try {
-      const r = await fetch(`${API}/api/photos/${id}`,{method:'DELETE'});
-      if (r.ok) { document.getElementById('ph-'+id)?.remove(); ok++; }
-      else fail++;
-    } catch(e) { fail++; }
-  }
-  _selPhotos.clear();
-  updatePhotoCount();
-  updateBulkBar();
-  if (fail) toast(`Удалено ${ok}, не удалось: ${fail}`,'err');
-  else toast(`Удалено ${ok} фото`,'ok');
-}
-
-function updatePhotoCount() {
-  const remaining = document.querySelectorAll('#photoGridAdmin .photo-admin').length;
-  document.getElementById('photoStats').textContent = `Всего фотографий: ${remaining}`;
-  if (!remaining) {
-    document.getElementById('photoEmpty').style.display = 'block';
-    document.getElementById('bulkBar').style.display = 'none';
-  }
 }
 
 function openLightbox(src, caption, meta) {
