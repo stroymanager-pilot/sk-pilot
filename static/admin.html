@@ -943,7 +943,10 @@ async function loadAllReports() {
         <td>${r.engineer_name||'—'}${r.engineer_active===0?' <span style="font-size:10px;color:var(--text3)">(архив)</span>':''}</td>
         <td>${r.project_name||'—'}</td>
         <td>${r.object_name||'—'}</td>
-        <td><span class="badge ${r.status==='submitted'?'badge-active':'badge-type'}">${r.status==='submitted'?'Сдана':'Черновик'}</span></td>
+        <td>
+          <span class="badge ${r.status==='submitted'?'badge-active':'badge-type'}">${r.status==='submitted'?'Сдана':'Черновик'}</span>
+          ${r.status==='submitted'&&r.submitted_at?(()=>{const p=r.submitted_at.slice(0,10).split('-');return`<div style="font-size:10px;color:var(--text3);margin-top:3px;font-family:'JetBrains Mono',monospace">${p[2]}.${p[1]}.${p[0]} ${r.submitted_at.slice(11,16)}</div>`})():''}
+        </td>
       </tr>`).join('')}
     </table>` : '<div class="empty">Сводок нет</div>';
 }
