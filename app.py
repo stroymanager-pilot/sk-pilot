@@ -8,8 +8,53 @@ from flask_cors import CORS
 import os, sys, hashlib, uuid
 from datetime import datetime, date
 
+try:
+    from PIL import Image
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+    _PIL_AVAILABLE = True
+except ImportError:
+    _PIL_AVAILABLE = False
+
 sys.path.insert(0, os.path.dirname(__file__))
 from db.schema import get_db, init_db
+
+# ── ОБРАБОТКА ИЗОБРАЖЕНИЙ ────────────────────────────────────
+_MAX_PX = 2000   # максимальная длинная сторона после ресайза
+_JPEG_Q = 80     # качество JPEG при сохранении
+
+def _process_image(src_path: str) -> str:
+    """Конвертирует HEIC→JPEG и/или уменьшает слишком большие снимки.
+    Возвращает путь к итоговому файлу (может совпадать с src_path для jpg/png).
+    Если Pillow недоступен — возвращает src_path без изменений."""
+    if not _PIL_AVAILABLE:
+        return src_path
+    try:
+        img = Image.open(src_path)
+        # Приводим к RGB — нужно для HEIC (RGBA/P/CMYK не сохраняются в JPEG)
+        if img.mode not in ('RGB', 'L'):
+            img = img.convert('RGB')
+        # Ресайз если нужен
+        w, h = img.size
+        if max(w, h) > _MAX_PX:
+            ratio = _MAX_PX / max(w, h)
+            img = img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
+        # Целевой путь всегда .jpg
+        base = os.path.splitext(src_path)[0]
+        dst_path = base + '.jpg'
+        img.save(dst_path, 'JPEG', quality=_JPEG_Q, optimize=True)
+        img.close()
+        # Удаляем оригинал только если он отличается от результата (т.е. был HEIC/PNG/…)
+        if src_path != dst_path:
+            try:
+                os.remove(src_path)
+            except OSError:
+                pass
+        return dst_path
+    except Exception:
+        # Если обработка не удалась — оставляем исходный файл как есть
+        return src_path
+# ─────────────────────────────────────────────────────────────
 
 app = Flask(__name__, static_folder='static', static_url_path='')
 init_db()  # Ensure DB exists on startup
@@ -757,7 +802,10 @@ def upload_photo(report_id):
     filepath = os.path.join(UPLOAD_FOLDER, filename)
     # 1. Тяжёлая операция — сохранение файла на диск; БД ещё не открыта
     f.save(filepath)
-    # 2. Файл уже на диске — открываем БД только на короткую вставку
+    # 1b. Конвертация HEIC→JPEG и/или ресайз (всё ещё до открытия БД)
+    final_path = _process_image(filepath)
+    filename = os.path.basename(final_path)
+    # 2. Файл обработан и лежит на диске — открываем БД только на короткую вставку
     db = get_db()
     try:
         sort_order = db.execute(
