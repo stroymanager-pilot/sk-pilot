@@ -141,6 +141,41 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 /* Плейсхолдеры — светло-серые, заметно бледнее введённого текста */
 ::placeholder{color:var(--text3);opacity:.7}
 ::-webkit-input-placeholder{color:var(--text3);opacity:.7}
+/* ── Лента вкладок: fade-намёк на прокрутку ── */
+.step-nav-wrap{position:relative}
+.step-nav-wrap::after{content:'';position:absolute;top:0;right:0;bottom:0;width:36px;background:linear-gradient(to right,transparent,var(--navy2));pointer-events:none;z-index:1}
+/* ── МОБИЛЬНАЯ АДАПТАЦИЯ (≤480px) ── */
+@media(max-width:480px){
+  /* Шапка: всё помещается в одну строку */
+  .hdr-row{padding:7px 10px 6px;gap:5px}
+  .hdr-mark{width:28px;height:28px;font-size:10px;border-radius:7px}
+  .hdr-brand{flex:1;min-width:0;gap:7px}
+  .hdr-title{font-size:12px;max-width:none}
+  .hdr-sub{font-size:10px}
+  .hdr-right{gap:4px;flex-shrink:0}
+  .status-pill{font-size:9px;padding:2px 6px}
+  .sync-dot{width:5px;height:5px}
+  .history-btn{padding:5px 8px;font-size:11px}
+  .logout-btn{padding:5px 8px;font-size:11px}
+  /* Контент: компактнее */
+  .main{padding:10px;padding-bottom:88px}
+  .card{padding:12px;margin-bottom:8px}
+  .card-h{margin-bottom:8px;font-size:11px}
+  .info-row{padding:7px 0;font-size:13px}
+  .info-lbl{font-size:11px}
+  /* Поля ввода */
+  input[type=text],input[type=number],input[type=date],input[type=time],input[type=email],select,textarea{padding:9px 10px;font-size:14px}
+  label.fl{margin-top:9px}
+  textarea{min-height:60px}
+  .new-form{padding:11px;margin-bottom:10px}
+  .dyn-row{padding:11px}
+  .p-row{padding:10px}
+  .row2{gap:7px}
+  .row3{gap:6px}
+  /* Нижние кнопки */
+  .btn-back{padding:11px 14px;font-size:13px}
+  .btn-next{padding:11px;font-size:14px}
+}
 </style>
 </head>
 <body>
@@ -162,7 +197,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
     </div>
   </div>
   <div class="prog-bar"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
-  <div class="step-nav" id="stepNav"></div>
+  <div class="step-nav-wrap"><div class="step-nav" id="stepNav"></div></div>
 </div>
 
 <div class="main" id="main"><div class="empty">Загрузка...</div></div>
