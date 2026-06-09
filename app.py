@@ -127,8 +127,48 @@ def auto_migrate():
     # Идемпотентная починка: убрать FK REFERENCES sections(id) у operational_control и acceptance_control.
     # Личные участки (user_sections) имеют свои id, которые не совпадают с sections → constraint failed.
     _fix_section_id_fk(db)
+    _fix_personnel_contractor_fk(db)
 
     db.close()
+
+def _fix_personnel_contractor_fk(db):
+    """Убирает REFERENCES contractors(id) из personnel_entries.contractor_id.
+    Сохраняет report_id ON DELETE CASCADE. Данные не теряются."""
+    # Проверяем через sqlite_master (надёжнее PRAGMA на той же сессии)
+    row = db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='personnel_entries'").fetchone()
+    if row is None:
+        return  # таблицы нет — ничего делать
+    if 'REFERENCES contractors' not in (row['sql'] or ''):
+        return  # FK уже снят — идемпотентно
+    create_sql = (
+        "CREATE TABLE personnel_entries_new ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "report_id INTEGER NOT NULL REFERENCES daily_reports(id) ON DELETE CASCADE,"
+        "contractor_id INTEGER NOT NULL,"
+        "section_id INTEGER,"
+        "headcount INTEGER DEFAULT 0,"
+        "work_description TEXT)"
+    )
+    db.execute("PRAGMA foreign_keys = OFF")
+    db.execute("BEGIN")
+    try:
+        db.execute(create_sql)
+        cols_old = [r['name'] for r in db.execute("PRAGMA table_info(personnel_entries)").fetchall()]
+        cols_new = [r['name'] for r in db.execute("PRAGMA table_info(personnel_entries_new)").fetchall()]
+        shared = [c for c in cols_old if c in cols_new]
+        col_list = ', '.join(shared)
+        db.execute(f"INSERT INTO personnel_entries_new ({col_list}) SELECT {col_list} FROM personnel_entries")
+        db.execute("DROP TABLE personnel_entries")
+        db.execute("ALTER TABLE personnel_entries_new RENAME TO personnel_entries")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_personnel_report ON personnel_entries(report_id)")
+        db.execute("COMMIT")
+        print("✅ _fix_personnel_contractor_fk: FK снят, данные сохранены")
+    except Exception as e:
+        db.execute("ROLLBACK")
+        print(f"⚠️  _fix_personnel_contractor_fk failed: {e}")
+    finally:
+        db.execute("PRAGMA foreign_keys = ON")
+
 
 def _fix_section_id_fk(db):
     """Перестраивает operational_control и acceptance_control без FK на sections(id)."""

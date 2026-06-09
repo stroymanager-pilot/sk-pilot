@@ -96,8 +96,8 @@ def init_db():
     CREATE TABLE IF NOT EXISTS personnel_entries (
         id                  INTEGER PRIMARY KEY AUTOINCREMENT,
         report_id           INTEGER NOT NULL REFERENCES daily_reports(id) ON DELETE CASCADE,
-        contractor_id       INTEGER NOT NULL REFERENCES contractors(id),
-        section_id          INTEGER,  -- нет FK: допускает личные участки (user_sections)
+        contractor_id       INTEGER NOT NULL,  -- нет FK: подрядчик может быть удалён, не ломаем сохранение
+        section_id          INTEGER,           -- нет FK: допускает личные участки (user_sections)
         headcount           INTEGER DEFAULT 0,
         work_description    TEXT    -- фактические работы за день
     );
