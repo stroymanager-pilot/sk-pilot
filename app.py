@@ -703,15 +703,28 @@ def upload_meeting_protocol(meeting_id):
     ext = os.path.splitext(f.filename)[1].lower()
     if ext not in ['.pdf', '.doc', '.docx']:
         return err('Допустимые форматы: pdf, doc, docx')
+    original_name = f.filename
     filename = f"protocol_{meeting_id}_{uuid.uuid4().hex}{ext}"
     filepath = os.path.join(UPLOAD_FOLDER, filename)
+    # 1. Сохраняем файл на диск — БД ещё не открыта
     f.save(filepath)
+    # 2. Только после записи на диск открываем БД и делаем короткий UPDATE
     db = get_db()
-    db.execute("UPDATE meetings SET protocol_path=?, protocol_name=? WHERE id=?",
-               (filename, f.filename, meeting_id))
-    db.commit()
-    db.close()
-    return ok({'file_path': filename, 'original_name': f.filename}), 201
+    try:
+        db.execute("UPDATE meetings SET protocol_path=?, protocol_name=? WHERE id=?",
+                   (filename, original_name, meeting_id))
+        db.commit()
+    except Exception:
+        db.rollback()
+        # Убираем осиротевший файл, если запись в БД не удалась
+        try:
+            os.remove(filepath)
+        except OSError:
+            pass
+        raise
+    finally:
+        db.close()
+    return ok({'file_path': filename, 'original_name': original_name}), 201
 
 @app.delete('/api/meetings/<int:meeting_id>/protocol')
 def delete_meeting_protocol(meeting_id):
@@ -738,22 +751,37 @@ def upload_photo(report_id):
     ext = os.path.splitext(f.filename)[1].lower()
     if ext not in ['.jpg', '.jpeg', '.png', '.heic', '.webp']:
         return err('Допустимые форматы: jpg, png, heic, webp')
-    filename = f"{uuid.uuid4().hex}{ext}"
-    filepath = os.path.join(UPLOAD_FOLDER, filename)
-    f.save(filepath)
-    db = get_db()
     remark_id = request.form.get('remark_id')
     caption = request.form.get('caption', '')
-    # Порядок — следующий по списку
-    sort_order = db.execute("SELECT COALESCE(MAX(sort_order),0)+1 FROM photos WHERE report_id=?", (report_id,)).fetchone()[0]
-    cur = db.execute(
-        "INSERT INTO photos (report_id, file_path, caption, sort_order, remark_id) VALUES (?,?,?,?,?)",
-        (report_id, filename, caption, sort_order, remark_id)
-    )
-    db.commit()
-    row = db.execute("SELECT * FROM photos WHERE id=?", (cur.lastrowid,)).fetchone()
-    db.close()
-    return ok(dict(row)), 201
+    filename = f"{uuid.uuid4().hex}{ext}"
+    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    # 1. Тяжёлая операция — сохранение файла на диск; БД ещё не открыта
+    f.save(filepath)
+    # 2. Файл уже на диске — открываем БД только на короткую вставку
+    db = get_db()
+    try:
+        sort_order = db.execute(
+            "SELECT COALESCE(MAX(sort_order),0)+1 FROM photos WHERE report_id=?",
+            (report_id,)
+        ).fetchone()[0]
+        cur = db.execute(
+            "INSERT INTO photos (report_id, file_path, caption, sort_order, remark_id) VALUES (?,?,?,?,?)",
+            (report_id, filename, caption, sort_order, remark_id)
+        )
+        db.commit()
+        row = db.execute("SELECT * FROM photos WHERE id=?", (cur.lastrowid,)).fetchone()
+        result = dict(row)
+    except Exception:
+        db.rollback()
+        # Убираем осиротевший файл, если запись в БД не удалась
+        try:
+            os.remove(filepath)
+        except OSError:
+            pass
+        raise
+    finally:
+        db.close()
+    return ok(result), 201
 
 @app.patch('/api/photos/<int:photo_id>')
 def update_photo(photo_id):
