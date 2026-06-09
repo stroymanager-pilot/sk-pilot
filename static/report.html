@@ -1448,12 +1448,13 @@ async function openPastReport(id, date) {
   document.getElementById('pastReportBody').innerHTML='<div class="empty">Загрузка...</div>';
   const r=await fetchWithRetry(`${API}/api/reports/${id}`).then(r=>r.json()).catch(()=>({data:{}}));
   const d=r.data||{};
-  const personnel=(d.personnel||[]).filter(p=>p.headcount>0);
+  const personnel=(d.personnel||[]).filter(p=>parseInt(p.headcount)>0||p.work_description);
   const ic=d.input_control||[];
   const oc=d.operational_control||[];
   const ac=d.acceptance_control||[];
   const ks2=d.ks2_check||[];
   const remarks=d.verbal_remarks||[];
+  const prescriptions=d.prescriptions_log||[];
   const photos=d.photos||[];
   const meetings=d.meetings||[];
   // Все замечания из контролей
@@ -1478,28 +1479,32 @@ async function openPastReport(id, date) {
           <div style="font-size:13px;font-weight:600;margin-top:2px">${v||'—'}</div>
         </div>`).join('')}
     </div>
-    ${sec('👷','Персонал', personnel.length?personnel.map(p=>`
-      <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--surface2)">
-        <div><div style="font-weight:600;font-size:13px">${esc(p.contractor_name)}</div>
-        <div style="font-size:11px;color:var(--text3)">${esc(p.section_name)||''} · ${esc(p.work_description)||''}</div></div>
-        <div style="font-family:var(--mono);font-size:18px;font-weight:700">${p.headcount}</div>
-      </div>`).join(''):'')}
+    ${sec('👷','Персонал', personnel.length?personnel.map(p=>{
+      const conName=esc(p.contractor_name)||'(подрядчик удалён)';
+      const secPart=p.section_name?esc(p.section_name)+'  ':'';
+      const wdPart=p.work_description?esc(p.work_description):'';
+      const sub=[secPart,wdPart].filter(Boolean).join('');
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--surface2)">
+        <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">${conName}</div>
+        ${sub?`<div style="font-size:11px;color:var(--text3);margin-top:1px">${sub}</div>`:''}</div>
+        ${parseInt(p.headcount)>0?`<div style="font-family:var(--mono);font-size:18px;font-weight:700;margin-left:10px;flex-shrink:0">${p.headcount} чел.</div>`:''}
+      </div>`;}).join(''):'')}
     ${sec('📦','Входной контроль', ic.length?ic.map(x=>`
       <div style="padding:6px 0;border-bottom:1px solid var(--surface2)">
         <div style="font-size:13px;font-weight:600">${esc(x.material_name)}</div>
-        <div style="font-size:11px;color:var(--text3)">${esc(x.quantity||'')}${x.quantity&&x.document_name?' · ':''}${esc(x.document_name||'')}${x.section_name?' · '+esc(x.section_name):''}</div>
+        <div style="font-size:11px;color:var(--text3)">${[esc(x.quantity||''),esc(x.document_name||''),x.section_name?esc(x.section_name):''].filter(Boolean).join(' · ')}</div>
         ${x.deviation_note?`<div style="font-size:12px;color:var(--red);margin-top:2px">⚠ ${esc(x.deviation_note)}</div>`:'<div style="font-size:12px;color:var(--green);margin-top:2px">✓ Норма</div>'}
       </div>`).join(''):'')}
     ${sec('🔍','Операционный контроль', oc.length?oc.map(x=>`
       <div style="padding:6px 0;border-bottom:1px solid var(--surface2)">
         <div style="font-size:13px;font-weight:600">${esc(x.work_stage||'—')}</div>
-        <div style="font-size:11px;color:var(--text3)">${[esc(x.section_name||''),esc(x.controlled_operations||''),esc(x.control_method||'')].filter(Boolean).join(' · ')}</div>
+        <div style="font-size:11px;color:var(--text3)">${[x.section_name?esc(x.section_name):'',esc(x.controlled_operations||''),esc(x.control_method||'')].filter(Boolean).join(' · ')}</div>
         ${x.deviation_note?`<div style="font-size:12px;color:var(--red);margin-top:2px">⚠ ${esc(x.deviation_note)}</div>`:'<div style="font-size:12px;color:var(--green);margin-top:2px">✓ Норма</div>'}
       </div>`).join(''):'')}
     ${sec('✅','Приёмочный контроль', ac.length?ac.map(x=>`
       <div style="padding:6px 0;border-bottom:1px solid var(--surface2)">
         <div style="font-size:13px;font-weight:600">${esc(x.work_stage||'—')}</div>
-        <div style="font-size:11px;color:var(--text3)">${[esc(x.section_name||''),esc(x.controlled_operations||'')].filter(Boolean).join(' · ')}</div>
+        <div style="font-size:11px;color:var(--text3)">${[x.section_name?esc(x.section_name):'',esc(x.controlled_operations||''),esc(x.control_method||'')].filter(Boolean).join(' · ')}</div>
         ${x.deviation_note?`<div style="font-size:12px;color:var(--red);margin-top:2px">⚠ ${esc(x.deviation_note)}</div>`:'<div style="font-size:12px;color:var(--green);margin-top:2px">✓ Норма</div>'}
       </div>`).join(''):'')}
     ${sec('⚠️',`Замечания (${allRem.length})`, allRem.length?allRem.map(x=>`
@@ -1509,6 +1514,14 @@ async function openPastReport(id, date) {
           <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase">${x.src}</div>
           <div style="font-size:13px">${x.item?esc(x.item)+' — ':''}${esc(x.note||'')}</div>
         </div>
+      </div>`).join(''):'')}
+    ${sec('📋',`Предписания (${prescriptions.length})`, prescriptions.length?prescriptions.map(x=>`
+      <div style="padding:7px 0;border-bottom:1px solid var(--surface2)">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <div style="font-size:13px;font-weight:600">${x.number?'№ '+esc(x.number):'Предписание'}</div>
+          ${x.status?`<div style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:${x.status==='closed'?'var(--green-pale)':'var(--amber-pale)'};color:${x.status==='closed'?'var(--green)':'var(--amber)'}">${esc(x.status)}</div>`:''}
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${[x.issue_date?'Дата: '+esc(x.issue_date):'',x.deadline?'Срок: '+esc(x.deadline):'',x.section_name?esc(x.section_name):''].filter(Boolean).join(' · ')}</div>
       </div>`).join(''):'')}
     ${sec('📑','ИД / КС-2', ks2.length?`<table style="width:100%;font-size:12px;border-collapse:collapse">
       <tr style="color:var(--text3);font-size:10px;text-transform:uppercase">
