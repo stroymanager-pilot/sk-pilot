@@ -690,7 +690,10 @@ function sectionOpts(selected) {
 
 // ── PERSONNEL ──
 // Добавляет новую строку участка для подрядчика (вызывается из кнопки "+ участок")
-window._pAddRow = function(cId, cName) {
+window._pAddRow = function(cId) {
+  // Имя берём из уже имеющейся строки — не передаём через HTML-атрибут (сломало бы кавычки)
+  const existing = window._prows.find(r => r.contractor_id === cId);
+  const cName = existing ? existing.contractor_name : '';
   window._prows.push({contractor_id:cId, contractor_name:cName,
     section_id:S.allSections[0]?.id||null, headcount:0, work_description:'', saved:false});
   showStep(currentStep);
@@ -796,7 +799,7 @@ function renderPersonnel() {
       }).join('')}
       <div style="padding:6px 10px;background:var(--surface2)">
         <button class="btn-s" style="font-size:12px;padding:4px 10px"
-          onclick="window._pAddRow(${con.id},${JSON.stringify(con.name)})">+ участок</button>
+          onclick="window._pAddRow(${con.id})">+ участок</button>
       </div>
     </div>`;
   }).join('');
