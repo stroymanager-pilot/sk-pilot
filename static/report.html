@@ -548,6 +548,15 @@ async function autoSave() {
   if(id==='meeting'&&!S.isReadonly) await saveMeeting(true);
 }
 
+// ── ОЧИСТКА ФОРМЫ КОНТРОЛЯ после успешного сохранения ──
+// Вызывается ДО showStep: очищает поля так, чтобы saveDraftFormFields()
+// внутри showStep сохранил пустой черновик (hasContent=false → черновик не создаётся).
+function _clearCtrlForm(textIds, selectIds, devRowId) {
+  textIds.forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  selectIds.forEach(id => { const el=document.getElementById(id); if(el) el.selectedIndex=0; });
+  const dr=document.getElementById(devRowId); if(dr) dr.style.display='none';
+}
+
 // ── FORM DRAFT CACHE — не теряем введённое при смене вкладки ──
 const _formDrafts = {};
 // Ключи совпадают с STEPS[i].id
@@ -903,7 +912,10 @@ async function saveIC() {
         contractor_id:document.getElementById('icCon')?.value||null,
         deviation_note:document.getElementById('icStatus').value?document.getElementById('icDev').value:'',
         engineer_id:userId})}).then(r=>r.json());
-    S.inputControl.push(r.data); delete _formDrafts['input']; toast('Добавлено','ok'); showStep(currentStep);
+    S.inputControl.push(r.data);
+    _clearCtrlForm(['icMat','icQty','icDoc','icDev'],['icSec','icCon','icStatus'],'icDevRow');
+    delete _formDrafts['input']; toast('Добавлено','ok'); showStep(currentStep);
+    document.getElementById('icMat')?.focus();
   } catch(e) { toast('Ошибка: '+e.message,'err'); } finally { setSaving(false); }
 }
 
@@ -989,7 +1001,9 @@ async function saveOC() {
         engineer_id:userId})});
     const r=await fetch(`${API}/api/reports/${S.reportId}`).then(r=>r.json());
     if(S.report)S.report.operational_control=r.data.operational_control;
+    _clearCtrlForm(['ocStage','ocOps','ocMethod','ocSec_dev'],['ocSec','ocStageCon','ocSec_status'],'ocSec_devrow');
     delete _formDrafts['operational']; toast('Сохранено','ok'); showStep(currentStep);
+    document.getElementById('ocStage')?.focus();
   } catch(e) { toast('Ошибка: '+e.message,'err'); } finally { setSaving(false); }
 }
 async function deleteOC(id) {
@@ -1014,7 +1028,10 @@ async function saveAC() {
         contractor_id:document.getElementById('acStageCon')?.value||null,
         status:acStatusEl?.value||'',deviation_note:acStatusEl?.value&&acDevEl?acDevEl.value:'',
         engineer_id:userId})}).then(r=>r.json());
-    S.acceptanceControl.push(r.data); delete _formDrafts['acceptance']; toast('Сохранено','ok'); showStep(currentStep);
+    S.acceptanceControl.push(r.data);
+    _clearCtrlForm(['acStage','acOps','acMethod','acSec_dev'],['acSec','acStageCon','acSec_status'],'acSec_devrow');
+    delete _formDrafts['acceptance']; toast('Сохранено','ok'); showStep(currentStep);
+    document.getElementById('acStage')?.focus();
   } catch(e) { toast('Ошибка: '+e.message,'err'); } finally { setSaving(false); }
 }
 async function deleteAC(id) {
