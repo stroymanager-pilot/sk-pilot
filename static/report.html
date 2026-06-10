@@ -689,56 +689,125 @@ function sectionOpts(selected) {
 }
 
 // ── PERSONNEL ──
+// Добавляет новую строку участка для подрядчика (вызывается из кнопки "+ участок")
+window._pAddRow = function(cId, cName) {
+  window._prows.push({contractor_id:cId, contractor_name:cName,
+    section_id:S.allSections[0]?.id||null, headcount:0, work_description:'', saved:false});
+  showStep(currentStep);
+};
+
 function renderPersonnel() {
+  // Инициализация _prows из сохранённых данных
   if (!window._prows.length) {
     if (S.personnel.length>0) {
-      const saved=S.personnel.map(p=>({...p,saved:true}));
+      const saved=S.personnel.map(p=>({
+        contractor_id:p.contractor_id,
+        contractor_name:p.contractor_name||'(подрядчик удалён)',
+        section_id:p.section_id,
+        headcount:parseInt(p.headcount)||0,
+        work_description:p.work_description||'',
+        saved:true
+      }));
       const usedIds=new Set(S.personnel.map(p=>p.contractor_id));
       const unsaved=S.contractors.filter(c=>c.work_type!=='Заказчик'&&!usedIds.has(c.id)).map(c=>({
-        contractor_id:c.id,contractor_name:c.name,section_id:S.allSections[0]?.id,headcount:0,work_description:'',saved:false}));
+        contractor_id:c.id,contractor_name:c.name,
+        section_id:S.allSections[0]?.id||null,headcount:0,work_description:'',saved:false}));
       window._prows=[...saved,...unsaved];
     } else {
-      window._prows=S.contractors.filter(c=>c.work_type!=='Заказчик').map(c=>({contractor_id:c.id,contractor_name:c.name,
-        section_id:S.allSections[0]?.id,headcount:0,work_description:'',saved:false}));
+      window._prows=S.contractors.filter(c=>c.work_type!=='Заказчик').map(c=>({
+        contractor_id:c.id,contractor_name:c.name,
+        section_id:S.allSections[0]?.id||null,headcount:0,work_description:'',saved:false}));
     }
   }
-  const show=window._prows.filter(r=>!r.saved||parseInt(r.headcount)>0);
-  const hidden=window._prows.filter(r=>r.saved&&parseInt(r.headcount)===0);
-  if (S.isReadonly) return `
-    <div class="readonly-banner">✅ Сводка сдана — редактирование недоступно</div>
-    <div class="card">
-      <div class="card-h"><div class="ico">👷</div>Персонал</div>
-      ${S.personnel.filter(p=>p.headcount>0).map(p=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--surface2)">
-        <div><div style="font-weight:600">${esc(p.contractor_name)}</div><div style="font-size:12px;color:var(--text3)">${esc(p.section_name)||''}</div>
-        <div style="font-size:12px;color:var(--text3)">${esc(p.work_description)||''}</div></div>
-        <div style="font-family:var(--mono);font-size:20px;font-weight:700">${esc(p.headcount)}</div>
-      </div>`).join('')||'<div class="empty">Нет данных</div>'}
-    </div>`;
-  return `
-    <div style="font-size:19px;font-weight:800;color:var(--navy);margin-bottom:4px">Подрядчики и численность</div>
-    <div style="font-size:13px;color:var(--text3);margin-bottom:14px">Численность и работы. Строки с 0 не сохраняются.${hidden.length?` <span style="color:var(--green)">${hidden.length} скрыто</span>`:''}</div>
-    <div class="card">
-      <div class="card-h"><div class="ico">👷</div>Численность</div>
-      ${show.map((row)=>{
+
+  // Опции участков: личные + общие секции объекта (S.allSections)
+  function pSecOpts(sel) {
+    if (!S.allSections.length) return `<option value="">— добавьте участок —</option>`;
+    return S.allSections.map(s=>`<option value="${s.id}"${s.id==sel?' selected':''}>${esc(s.name)}</option>`).join('');
+  }
+
+  // Уникальный порядок подрядчиков
+  const order=[]; const seenC=new Set();
+  for (const r of window._prows) {
+    if (!seenC.has(r.contractor_id)) { seenC.add(r.contractor_id); order.push({id:r.contractor_id,name:r.contractor_name}); }
+  }
+
+  // ── READONLY ──
+  if (S.isReadonly) {
+    const byC={};
+    for (const p of S.personnel) {
+      if (!parseInt(p.headcount)&&!p.work_description) continue;
+      if (!byC[p.contractor_id]) byC[p.contractor_id]={name:p.contractor_name||'(подрядчик удалён)',rows:[]};
+      byC[p.contractor_id].rows.push(p);
+    }
+    const groups=Object.values(byC);
+    return `
+      <div class="readonly-banner">✅ Сводка сдана — редактирование недоступно</div>
+      <div class="card">
+        <div class="card-h"><div class="ico">👷</div>Персонал</div>
+        ${groups.length?groups.map(g=>`
+          <div style="margin-bottom:12px">
+            <div style="font-weight:700;font-size:14px;color:var(--navy);padding:6px 0 4px;border-bottom:2px solid var(--surface2)">${esc(g.name)}</div>
+            ${g.rows.map(p=>`
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0 5px 8px;border-bottom:1px solid var(--surface2)">
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:13px;color:var(--text2)">${esc(p.section_name)||'—'}</div>
+                  ${p.work_description?`<div style="font-size:11px;color:var(--text3);margin-top:1px">${esc(p.work_description)}</div>`:''}
+                </div>
+                <div style="font-family:var(--mono);font-size:20px;font-weight:700;margin-left:8px;flex-shrink:0">${parseInt(p.headcount)||0}</div>
+              </div>`).join('')}
+          </div>`).join(''):'<div class="empty">Нет данных</div>'}
+      </div>`;
+  }
+
+  // Считаем скрытые группы (подрядчики, у которых все строки — пустые сохранённые)
+  let hiddenCnt=0;
+  for (const con of order) {
+    const rows=window._prows.filter(r=>r.contractor_id===con.id);
+    if (rows.every(r=>r.saved&&parseInt(r.headcount)===0&&!r.work_description)) hiddenCnt++;
+  }
+
+  // ── РЕДАКТИРУЕМЫЙ режим — группы по подрядчикам ──
+  const groupsHtml=order.map(con=>{
+    const rows=window._prows.filter(r=>r.contractor_id===con.id);
+    const visible=rows.filter(r=>!r.saved||parseInt(r.headcount)>0||r.work_description);
+    if (!visible.length) return '';
+    const total=rows.reduce((s,r)=>s+(parseInt(r.headcount)||0),0);
+    return `<div style="margin-bottom:10px;border:1.5px solid var(--border);border-radius:var(--r-sm);overflow:hidden">
+      <div style="background:var(--surface2);padding:8px 12px;display:flex;justify-content:space-between;align-items:center">
+        <div style="font-weight:700;font-size:14px;color:var(--navy)">${esc(con.name)}</div>
+        ${total>0?`<div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--navy3)">∑ ${total} чел.</div>`:''}
+      </div>
+      ${visible.map(row=>{
         const idx=window._prows.indexOf(row);
-        return `<div class="p-row">
-          <div class="p-row-head">
-            <div style="flex:1;min-width:0"><div class="p-name">${row.contractor_name}</div>
-            <select style="margin-top:4px;font-size:12px;padding:4px 28px 4px 8px;background:var(--surface);width:100%;min-width:0" onchange="window._prows[${idx}].section_id=this.value">
-              ${sectionOpts(row.section_id)}
-            </select></div>
-            <input type="number" class="p-hc" style="width:64px;flex-shrink:0" value="${row.headcount||''}" min="0" placeholder="0"
+        return `<div style="padding:10px 12px;border-top:1px solid var(--surface2);background:var(--surface)">
+          <div class="p-row-head" style="margin-bottom:6px">
+            <select style="flex:1;font-size:12px;padding:4px 24px 4px 8px;background:#fff;min-width:0;border-radius:var(--r-sm);border:1.5px solid var(--border)"
+              onchange="window._prows[${idx}].section_id=this.value">
+              ${pSecOpts(row.section_id)}
+            </select>
+            <input type="number" class="p-hc" style="width:64px;flex-shrink:0" value="${parseInt(row.headcount)||''}" min="0" placeholder="0"
               onchange="window._prows[${idx}].headcount=parseInt(this.value)||0">
             <button class="p-rm" onclick="window._prows.splice(${idx},1);showStep(${currentStep})">✕</button>
           </div>
-          <textarea placeholder="Описание работ за день..." style="min-height:52px;font-size:14px"
+          <textarea placeholder="Описание работ за день..." style="min-height:44px;font-size:14px;margin-bottom:0"
             onblur="window._prows[${idx}].work_description=this.value">${row.work_description||''}</textarea>
         </div>`;
       }).join('')}
-      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-        <button class="btn-p" onclick="savePersonnelBtn()">💾 Сохранить</button>
-        ${hidden.length?`<button class="btn-s" onclick="window._prows.forEach(r=>r.saved=false);showStep(${currentStep})">Показать все</button>`:''}
+      <div style="padding:6px 10px;background:var(--surface2)">
+        <button class="btn-s" style="font-size:12px;padding:4px 10px"
+          onclick="window._pAddRow(${con.id},${JSON.stringify(con.name)})">+ участок</button>
       </div>
+    </div>`;
+  }).join('');
+
+  return `
+    <div style="font-size:19px;font-weight:800;color:var(--navy);margin-bottom:4px">Подрядчики и численность</div>
+    <div style="font-size:13px;color:var(--text3);margin-bottom:14px">Численность по участкам. Строки с 0 не сохраняются.${hiddenCnt?` <span style="color:var(--green)">${hiddenCnt} подр. скрыто</span>`:''}</div>
+    ${groupsHtml||'<div class="empty">Нет подрядчиков на объекте</div>'}
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+      <button class="btn-p" onclick="savePersonnelBtn()">💾 Сохранить</button>
+      ${hiddenCnt?`<button class="btn-s" onclick="window._prows.forEach(r=>{r.saved=false});showStep(${currentStep})">Показать все</button>`:''}
     </div>`;
 }
 
@@ -750,8 +819,10 @@ async function savePersonnelBtn() {
 async function saveAllPersonnel(silent=false) {
   if (S.isReadonly) return null;
   const entries=window._prows.filter(r=>parseInt(r.headcount)>0||r.work_description).map(r=>({
-    contractor_id:r.contractor_id,section_id:r.section_id,
-    headcount:parseInt(r.headcount)||0,work_description:r.work_description}));
+    contractor_id:r.contractor_id,
+    section_id:r.section_id,
+    headcount:parseInt(r.headcount)||0,
+    work_description:r.work_description||''}));
   if (!entries.length) return false;
   setSaving(true);
   try {
@@ -1479,16 +1550,26 @@ async function openPastReport(id, date) {
           <div style="font-size:13px;font-weight:600;margin-top:2px">${v||'—'}</div>
         </div>`).join('')}
     </div>
-    ${sec('👷','Персонал', personnel.length?personnel.map(p=>{
-      const conName=esc(p.contractor_name)||'(подрядчик удалён)';
-      const secPart=p.section_name?esc(p.section_name)+'  ':'';
-      const wdPart=p.work_description?esc(p.work_description):'';
-      const sub=[secPart,wdPart].filter(Boolean).join('');
-      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--surface2)">
-        <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">${conName}</div>
-        ${sub?`<div style="font-size:11px;color:var(--text3);margin-top:1px">${sub}</div>`:''}</div>
-        ${parseInt(p.headcount)>0?`<div style="font-family:var(--mono);font-size:18px;font-weight:700;margin-left:10px;flex-shrink:0">${p.headcount} чел.</div>`:''}
-      </div>`;}).join(''):'')}
+    ${sec('👷','Персонал', (()=>{
+      if (!personnel.length) return '';
+      const byC={};
+      for (const p of personnel) {
+        const k=p.contractor_id;
+        if (!byC[k]) byC[k]={name:p.contractor_name||'(подрядчик удалён)',rows:[]};
+        byC[k].rows.push(p);
+      }
+      return Object.values(byC).map(g=>`
+        <div style="margin-bottom:10px">
+          <div style="font-weight:700;font-size:13px;color:var(--navy);padding:4px 0;border-bottom:2px solid var(--surface2)">${esc(g.name)}</div>
+          ${g.rows.map(p=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0 4px 8px;border-bottom:1px solid var(--surface2)">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px;color:var(--text2)">${esc(p.section_name)||'—'}</div>
+              ${p.work_description?`<div style="font-size:11px;color:var(--text3);margin-top:1px">${esc(p.work_description)}</div>`:''}
+            </div>
+            ${parseInt(p.headcount)>0?`<div style="font-family:var(--mono);font-size:17px;font-weight:700;margin-left:8px;flex-shrink:0">${p.headcount} чел.</div>`:''}
+          </div>`).join('')}
+        </div>`).join('');
+    })())}
     ${sec('📦','Входной контроль', ic.length?ic.map(x=>`
       <div style="padding:6px 0;border-bottom:1px solid var(--surface2)">
         <div style="font-size:13px;font-weight:600">${esc(x.material_name)}</div>
