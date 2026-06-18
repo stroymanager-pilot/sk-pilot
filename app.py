@@ -173,7 +173,9 @@ def _fix_personnel_contractor_fk(db):
 
 
 def _fix_section_id_fk(db):
-    """Перестраивает operational_control и acceptance_control без FK на sections(id)."""
+    """Перестраивает все таблицы инженера без жёстких FK на sections(id) или contractors(id).
+    Личные участки (user_sections) и удалённые подрядчики не должны блокировать сохранение."""
+    # Целевые DDL без FK на sections/contractors (report_id CASCADE — сохраняется везде)
     tables = {
         'operational_control': (
             "CREATE TABLE operational_control_new ("
@@ -195,28 +197,54 @@ def _fix_section_id_fk(db):
             "engineer_id INTEGER REFERENCES users(id),"
             "contractor_id INTEGER)"
         ),
+        'prescriptions_log': (
+            "CREATE TABLE prescriptions_log_new ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "report_id INTEGER NOT NULL REFERENCES daily_reports(id) ON DELETE CASCADE,"
+            "tj_prescription_id TEXT, number TEXT, issue_date TEXT,"
+            "section_id INTEGER, deadline TEXT, status TEXT)"
+        ),
+        'verbal_remarks': (
+            "CREATE TABLE verbal_remarks_new ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "report_id INTEGER NOT NULL REFERENCES daily_reports(id) ON DELETE CASCADE,"
+            "section_id INTEGER, description TEXT NOT NULL, deadline TEXT,"
+            "status TEXT DEFAULT 'open',"
+            "issued_by INTEGER REFERENCES users(id),"
+            "closed_at TEXT, closed_note TEXT)"
+        ),
+        'input_control': (
+            "CREATE TABLE input_control_new ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "report_id INTEGER NOT NULL REFERENCES daily_reports(id) ON DELETE CASCADE,"
+            "material_name TEXT, quantity TEXT, document_name TEXT,"
+            "deviation_note TEXT, engineer_id INTEGER REFERENCES users(id),"
+            "section_id INTEGER, contractor_id INTEGER)"
+        ),
     }
     for tbl, create_sql in tables.items():
         fk_list = db.execute(f"PRAGMA foreign_key_list({tbl})").fetchall()
-        has_sections_fk = any(row['table'] == 'sections' and row['from'] == 'section_id' for row in fk_list)
-        if not has_sections_fk:
+        # Ищем жёсткий FK на sections или contractors по полям section_id / contractor_id
+        has_bad_fk = any(
+            row['table'] in ('sections', 'contractors') and
+            row['from'] in ('section_id', 'contractor_id')
+            for row in fk_list
+        )
+        if not has_bad_fk:
             continue
-        # Перестройка без FK
         db.execute("PRAGMA foreign_keys = OFF")
         db.execute("BEGIN")
         try:
             db.execute(create_sql)
-            # Копируем только те колонки, которые точно есть (безопасно для разных состояний БД)
-            cols_row = db.execute(f"PRAGMA table_info({tbl})").fetchall()
-            cols = [r['name'] for r in cols_row]
-            new_cols_row = db.execute(f"PRAGMA table_info({tbl}_new)").fetchall()
-            new_cols = [r['name'] for r in new_cols_row]
+            cols = [r['name'] for r in db.execute(f"PRAGMA table_info({tbl})").fetchall()]
+            new_cols = [r['name'] for r in db.execute(f"PRAGMA table_info({tbl}_new)").fetchall()]
             shared = [c for c in cols if c in new_cols]
             col_list = ', '.join(shared)
             db.execute(f"INSERT INTO {tbl}_new ({col_list}) SELECT {col_list} FROM {tbl}")
             db.execute(f"DROP TABLE {tbl}")
             db.execute(f"ALTER TABLE {tbl}_new RENAME TO {tbl}")
             db.execute("COMMIT")
+            print(f"✅ _fix_section_id_fk({tbl}): FK снят, данные сохранены")
         except Exception as e:
             db.execute("ROLLBACK")
             print(f"⚠️  _fix_section_id_fk({tbl}) failed: {e}")
