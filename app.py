@@ -628,12 +628,17 @@ def submit_report(report_id):
 def add_personnel(report_id):
     d = request.json or {}
     with db_conn() as db:
-        # Если передан список — вставляем пачкой
         entries = d if isinstance(d, list) else [d]
+        # Атомарная замена: сначала удаляем ВСЕ строки ТОЛЬКО этой сводки,
+        # затем вставляем переданные. Чужие сводки не затрагиваются.
+        db.execute("DELETE FROM personnel_entries WHERE report_id=?", (report_id,))
         for e in entries:
+            if not e.get('contractor_id'):
+                continue
             db.execute(
-                "INSERT OR REPLACE INTO personnel_entries (report_id, contractor_id, section_id, headcount, work_description) VALUES (?,?,?,?,?)",
-                (report_id, e.get('contractor_id'), e.get('section_id'), e.get('headcount', 0), e.get('work_description'))
+                "INSERT INTO personnel_entries (report_id, contractor_id, section_id, headcount, work_description) VALUES (?,?,?,?,?)",
+                (report_id, e['contractor_id'], e.get('section_id'),
+                 int(e.get('headcount') or 0), e.get('work_description') or '')
             )
         db.commit()
         return ok()

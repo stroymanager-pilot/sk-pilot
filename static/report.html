@@ -805,8 +805,9 @@ function renderPersonnel() {
       </div>
       ${visible.map(row=>{
         const idx=window._prows.indexOf(row);
-        return `<div style="padding:10px 12px;border-top:1px solid var(--surface2);background:var(--surface)">
-          <div class="p-row-head" style="margin-bottom:6px">
+        const bg=row.saved?'rgba(46,160,67,.06)':'var(--surface)';
+        return `<div style="padding:10px 12px;border-top:1px solid var(--surface2);background:${bg}">
+          <div class="p-row-head" style="margin-bottom:4px">
             <select style="flex:1;font-size:12px;padding:4px 24px 4px 8px;background:#fff;min-width:0;border-radius:var(--r-sm);border:1.5px solid var(--border)"
               onchange="window._prows[${idx}].section_id=this.value">
               ${pSecOpts(row.section_id)}
@@ -815,6 +816,7 @@ function renderPersonnel() {
               onchange="window._prows[${idx}].headcount=parseInt(this.value)||0">
             <button class="p-rm" onclick="window._prows.splice(${idx},1);showStep(${currentStep})">✕</button>
           </div>
+          ${row.saved?`<div style="font-size:10px;color:var(--green);font-weight:700;margin-bottom:3px">✓ сохранено</div>`:''}
           <textarea placeholder="Описание работ за день..." style="min-height:44px;font-size:14px;margin-bottom:0"
             onblur="window._prows[${idx}].work_description=this.value">${row.work_description||''}</textarea>
         </div>`;
@@ -837,7 +839,7 @@ function renderPersonnel() {
 async function savePersonnelBtn() {
   const saved = await saveAllPersonnel(false);
   if (saved) toast('Персонал сохранён','ok');
-  else if (saved === false) toast('Нечего сохранять — введите количество > 0','err');
+  else if (saved === null) { /* readonly — молча */ }
 }
 async function saveAllPersonnel(silent=false) {
   if (S.isReadonly) return null;
@@ -846,12 +848,17 @@ async function saveAllPersonnel(silent=false) {
     section_id:r.section_id,
     headcount:parseInt(r.headcount)||0,
     work_description:r.work_description||''}));
-  if (!entries.length) return false;
+  // При автосохранении (переход между шагами) пропускаем пустой список —
+  // чтобы не стирать ранее сохранённый персонал при навигации без изменений.
+  if (silent && !entries.length) return false;
   setSaving(true);
   try {
     await fetch(`${API}/api/reports/${S.reportId}/personnel`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(entries)});
     const r=await fetch(`${API}/api/reports/${S.reportId}`).then(r=>r.json());
-    S.personnel=r.data.personnel||[]; window._prows=[]; updatePills();
+    S.personnel=r.data.personnel||[];
+    window._prows=[];   // сброс: renderPersonnel пересоздаст из S.personnel с saved:true
+    if (!silent) showStep(currentStep);  // перерисовать — покажет "✓ сохранено"
+    updatePills();
     return true;
   } catch(e) {
     if (!silent) toast('Ошибка сохранения персонала: '+e.message,'err');
