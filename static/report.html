@@ -1188,7 +1188,8 @@ function renderKS2() {
       <div class="new-form">
         <div style="margin-bottom:12px">
           <label class="fl no-mt" style="font-size:14px;font-weight:700;margin-bottom:6px">Подрядная организация</label>
-          <input id="ks2Con" placeholder="ООО «Фортес»" style="font-size:16px;padding:12px 14px">
+          <input id="ks2Con" list="ks2ConList" placeholder="ООО «Фортес»" style="font-size:16px;padding:12px 14px">
+          <datalist id="ks2ConList">${S.contractors.map(c=>`<option value="${esc(c.name)}">`).join('')}</datalist>
         </div>
         <div style="margin-bottom:12px">
           <label class="fl no-mt" style="font-size:14px;font-weight:700;margin-bottom:6px">Вид работ</label>
@@ -1250,7 +1251,11 @@ async function saveKS2() {
         has_ks3:document.getElementById('ks2Num3').value?1:0,
         has_ks6a:document.getElementById('ks2Ks6a').checked,
         has_id:document.getElementById('ks2Id').checked,engineer_id:userId})}).then(r=>r.json());
-    S.ks2Check.push(r.data); delete _formDrafts['ks2']; toast('Добавлено','ok'); showStep(currentStep);
+    S.ks2Check.push(r.data);
+    ['ks2Con','ks2Work','ks2Num','ks2Num3'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    ['ks2Ks6a','ks2Id'].forEach(id=>{const el=document.getElementById(id);if(el)el.checked=false;});
+    delete _formDrafts['ks2']; toast('Добавлено','ok'); showStep(currentStep);
+    document.getElementById('ks2Con')?.focus();
   } catch(e) { toast('Ошибка: '+e.message,'err'); } finally { setSaving(false); }
 }
 async function deleteKS2(id) {
