@@ -970,8 +970,8 @@ function renderOCsection(title, ico, items, addFn, delFn, stageId, opsId, method
     ${!S.isReadonly?`<div class="card">
       <div class="card-h"><div class="ico">${ico}</div>Добавить запись</div>
       <div class="new-form">
-        <label class="fl no-mt">Место проведения работ / Этап работ</label>
-        <textarea id="${stageId}" placeholder="Пятно застройки · Армирование, погружение свай..." style="min-height:56px;resize:vertical;font-size:14px"></textarea>
+        <label class="fl no-mt">${ico==='🔍'?'Наименование и этап работ':'Наименование работ / конструкции'}</label>
+        <textarea id="${stageId}" placeholder="${ico==='🔍'?'Напр.: Монолитные работы (ось А-Г / 1-6) — армирование плиты перекрытия':'Напр.: Армирование плиты перекрытия на отм. +3.200 (скрытые работы)'}" style="min-height:56px;resize:vertical;font-size:14px"></textarea>
         <div class="row2" style="margin-top:10px">
           <div><label class="fl no-mt">Контролируемые операции</label><textarea id="${opsId}" style="min-height:60px;resize:vertical"></textarea></div>
           <div><label class="fl no-mt">Метод контроля</label><textarea id="${methodId}" style="min-height:60px;resize:vertical"></textarea></div>
