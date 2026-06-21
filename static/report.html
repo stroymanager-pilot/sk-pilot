@@ -816,7 +816,7 @@ function renderPersonnel() {
         const bg=row.saved?'rgba(46,160,67,.06)':'var(--surface)';
         return `<div style="padding:10px 12px;border-top:1px solid var(--surface2);background:${bg}">
           <div class="p-row-head" style="margin-bottom:4px">
-            <select style="flex:1;font-size:12px;padding:4px 24px 4px 8px;background:#fff;min-width:0;border-radius:var(--r-sm);border:1.5px solid var(--border)"
+            <select style="flex:1;font-size:12px;padding:4px 28px 4px 8px;background-color:#fff;min-width:0;border-radius:var(--r-sm);border:1.5px solid var(--border)"
               onchange="window._prows[${idx}].section_id=this.value">
               ${pSecOpts(row.section_id)}
             </select>
