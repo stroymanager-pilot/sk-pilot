@@ -118,6 +118,7 @@ def auto_migrate():
             ("ALTER TABLE operational_control ADD COLUMN contractor_id INTEGER", "operational_control.contractor_id"),
             ("ALTER TABLE acceptance_control ADD COLUMN contractor_id INTEGER", "acceptance_control.contractor_id"),
             ("ALTER TABLE input_control ADD COLUMN contractor_id INTEGER", "input_control.contractor_id"),
+            ("ALTER TABLE input_control ADD COLUMN status TEXT DEFAULT ''", "input_control.status"),
         ]
         for sql, label in migrations:
             try:
@@ -659,8 +660,8 @@ def add_input_control(report_id):
     d = request.json or {}
     with db_conn() as db:
         cur = db.execute(
-            "INSERT INTO input_control (report_id, material_name, quantity, document_name, section_id, deviation_note, engineer_id, contractor_id) VALUES (?,?,?,?,?,?,?,?)",
-            (report_id, d.get('material_name'), d.get('quantity'), d.get('document_name'), d.get('section_id'), d.get('deviation_note'), d.get('engineer_id'), d.get('contractor_id'))
+            "INSERT INTO input_control (report_id, material_name, quantity, document_name, section_id, status, deviation_note, engineer_id, contractor_id) VALUES (?,?,?,?,?,?,?,?,?)",
+            (report_id, d.get('material_name'), d.get('quantity'), d.get('document_name'), d.get('section_id'), d.get('status',''), d.get('deviation_note',''), d.get('engineer_id'), d.get('contractor_id'))
         )
         db.commit()
         row = db.execute("SELECT ic.*, s.name as section_name, c.name as contractor_name FROM input_control ic LEFT JOIN sections s ON s.id=ic.section_id LEFT JOIN contractors c ON c.id=ic.contractor_id WHERE ic.id=?", (cur.lastrowid,)).fetchone()

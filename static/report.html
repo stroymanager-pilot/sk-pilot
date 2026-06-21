@@ -945,6 +945,7 @@ async function saveIC() {
         document_name:document.getElementById('icDoc').value,
         section_id:document.getElementById('icSec')?.value||null,
         contractor_id:document.getElementById('icCon')?.value||null,
+        status:document.getElementById('icStatus').value||'',
         deviation_note:document.getElementById('icStatus').value?document.getElementById('icDev').value:'',
         engineer_id:userId})}).then(r=>r.json());
     S.inputControl.push(r.data);
