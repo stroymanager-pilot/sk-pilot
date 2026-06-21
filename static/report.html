@@ -875,6 +875,15 @@ async function saveAllPersonnel(silent=false) {
 }
 
 // ── INPUT CONTROL ──
+function _ctrlStatus(status, deviation_note) {
+  if (status === 'Отклонение выявлено' || (!status && deviation_note)) {
+    return `<div style="font-size:12px;color:#E08A00;margin-top:2px">⚠ Принято с замечанием${deviation_note?'<br><span style="color:var(--text3)">'+esc(deviation_note)+'</span>':''}</div>`;
+  }
+  if (status) {
+    return `<div style="font-size:12px;color:var(--red);margin-top:2px">✕ Не принят${deviation_note?'<br><span style="color:var(--text3)">'+esc(deviation_note)+'</span>':''}</div>`;
+  }
+  return `<div style="font-size:12px;color:var(--green);margin-top:2px">✓ Норма</div>`;
+}
 function renderInput() {
   return `
     <div style="font-size:19px;font-weight:800;color:var(--navy);margin-bottom:4px">Входной контроль</div>
@@ -917,7 +926,7 @@ function renderInput() {
               <div style="font-size:14px;font-weight:600">${esc(ic.material_name)}</div>
               <div style="font-size:12px;color:var(--text3)">${esc(ic.quantity)||'—'} · ${esc(ic.document_name)||'—'}</div>
               <div style="font-size:12px;color:var(--text3);margin-top:1px">${esc(ic.section_name)||''}${ic.contractor_name?` · 🏗 ${esc(ic.contractor_name)}`:''}</div>
-              ${ic.deviation_note?`<div style="font-size:12px;color:var(--red);margin-top:2px">⚠ ${esc(ic.deviation_note)}</div>`:`<div style="font-size:12px;color:var(--green);margin-top:2px">✓ Норма</div>`}
+              ${_ctrlStatus(ic.status, ic.deviation_note)}
             </div>
             ${!S.isReadonly?`<button class="p-rm" onclick="deleteIC(${ic.id})">✕</button>`:''}
           </div>
@@ -999,7 +1008,7 @@ function renderOCsection(title, ico, items, addFn, delFn, stageId, opsId, method
           </div>
           ${o.contractor_name?`<div style="font-size:12px;color:var(--text3);margin-top:2px">🏗 ${esc(o.contractor_name)}</div>`:''}
           <div style="font-size:12px;color:var(--text3);margin-top:3px">Операции: ${esc(o.controlled_operations)||'—'}<br>Метод: ${esc(o.control_method)||'—'}</div>
-          ${o.deviation_note?`<div style="font-size:12px;color:var(--red);margin-top:3px">⚠ ${esc(o.deviation_note)}</div>`:(o.status?'':`<div style="font-size:12px;color:var(--green);margin-top:3px">✓ Норма</div>`)}
+          ${_ctrlStatus(o.status, o.deviation_note)}
         </div>`).join(''):'<div class="empty">Нет записей</div>'}
     </div>`;
 }
@@ -1672,19 +1681,19 @@ async function openPastReport(id, date) {
       <div style="padding:6px 0;border-bottom:1px solid var(--surface2)">
         <div style="font-size:13px;font-weight:600">${esc(x.material_name)}</div>
         <div style="font-size:11px;color:var(--text3)">${[esc(x.quantity||''),esc(x.document_name||''),x.section_name?esc(x.section_name):''].filter(Boolean).join(' · ')}</div>
-        ${x.deviation_note?`<div style="font-size:12px;color:var(--red);margin-top:2px">⚠ ${esc(x.deviation_note)}</div>`:'<div style="font-size:12px;color:var(--green);margin-top:2px">✓ Норма</div>'}
+        ${_ctrlStatus(x.status, x.deviation_note)}
       </div>`).join(''):'')}
     ${sec('🔍','Операционный контроль', oc.length?oc.map(x=>`
       <div style="padding:6px 0;border-bottom:1px solid var(--surface2)">
         <div style="font-size:13px;font-weight:600">${esc(x.work_stage||'—')}</div>
         <div style="font-size:11px;color:var(--text3)">${[x.section_name?esc(x.section_name):'',esc(x.controlled_operations||''),esc(x.control_method||'')].filter(Boolean).join(' · ')}</div>
-        ${x.deviation_note?`<div style="font-size:12px;color:var(--red);margin-top:2px">⚠ ${esc(x.deviation_note)}</div>`:'<div style="font-size:12px;color:var(--green);margin-top:2px">✓ Норма</div>'}
+        ${_ctrlStatus(x.status, x.deviation_note)}
       </div>`).join(''):'')}
     ${sec('✅','Приёмочный контроль', ac.length?ac.map(x=>`
       <div style="padding:6px 0;border-bottom:1px solid var(--surface2)">
         <div style="font-size:13px;font-weight:600">${esc(x.work_stage||'—')}</div>
         <div style="font-size:11px;color:var(--text3)">${[x.section_name?esc(x.section_name):'',esc(x.controlled_operations||''),esc(x.control_method||'')].filter(Boolean).join(' · ')}</div>
-        ${x.deviation_note?`<div style="font-size:12px;color:var(--red);margin-top:2px">⚠ ${esc(x.deviation_note)}</div>`:'<div style="font-size:12px;color:var(--green);margin-top:2px">✓ Норма</div>'}
+        ${_ctrlStatus(x.status, x.deviation_note)}
       </div>`).join(''):'')}
     ${sec('⚠️',`Замечания (${allRem.length})`, allRem.length?allRem.map(x=>`
       <div style="padding:6px 0;border-bottom:1px solid var(--surface2);display:flex;gap:8px">
