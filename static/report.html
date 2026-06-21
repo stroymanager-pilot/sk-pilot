@@ -303,6 +303,13 @@ function esc(v){if(v==null)return '';return String(v).replace(/`/g,'\\`').replac
 
 window._prows = [];
 let _meetingData = {day:'',loc:'',time:'',part:'',agenda:''};
+let _meetingSaved = false;
+window._onMeetingInput = function() {
+  if (!_meetingSaved) return;
+  _meetingSaved = false;
+  const btn = document.getElementById('meet-save-btn');
+  if (btn) { btn.textContent = '💾 Сохранить'; btn.style.background = ''; }
+};
 
 // ── РЕЕСТР (только senior с can_view_all=1) ──
 async function checkRegistryAccess() {
@@ -1303,17 +1310,17 @@ function renderMeeting() {
       <div class="card-h"><div class="ico">🤝</div>Данные совещания</div>
       <div class="row2">
         <div><label class="fl no-mt">Дата совещания</label>
-          <input type="date" id="mDate" value="${_meetingData.date||''}">
+          <input type="date" id="mDate" value="${_meetingData.date||''}" oninput="window._onMeetingInput()">
         </div>
-        <div><label class="fl no-mt">Время начала</label><input type="time" id="mTime" value="${_meetingData.time}"></div>
+        <div><label class="fl no-mt">Время начала</label><input type="time" id="mTime" value="${_meetingData.time}" oninput="window._onMeetingInput()"></div>
       </div>
       <label class="fl">Место проведения</label>
-      <textarea id="mLoc" style="min-height:56px" placeholder="Строительная площадка...">${_meetingData.loc}</textarea>
+      <textarea id="mLoc" style="min-height:56px" placeholder="Строительная площадка..." oninput="window._onMeetingInput()">${_meetingData.loc}</textarea>
       <label class="fl">Вопросы к совещанию</label>
-      <textarea id="mAgenda" style="min-height:90px" placeholder="Добавьте вопросы к следующему совещанию...">${_meetingData.agenda}</textarea>
+      <textarea id="mAgenda" style="min-height:90px" placeholder="Добавьте вопросы к следующему совещанию..." oninput="window._onMeetingInput()">${_meetingData.agenda}</textarea>
       <div style="font-size:11px;color:var(--text3);margin-top:4px">📌 Вопросы автоматически переносятся в каждую новую сводку</div>
       <div style="display:flex;gap:8px;margin-top:12px">
-        <button class="btn-p" onclick="saveMeeting(false)">💾 Сохранить</button>
+        <button id="meet-save-btn" class="btn-p" onclick="saveMeeting(false)" style="${_meetingSaved?'background:var(--green)':''}">${_meetingSaved?'✓ Сохранено':'💾 Сохранить'}</button>
         <button class="btn-s" onclick="clearMeeting()">Очистить</button>
       </div>
     </div>
@@ -1375,11 +1382,17 @@ async function saveMeeting(silent=false, force=false) {
     localStorage.setItem('meetingDefaults', JSON.stringify({...def, agenda}));
   }
   setSaving(false);
-  if(!silent) toast('Совещание сохранено','ok');
+  if(!silent) {
+    _meetingSaved = true;
+    const btn = document.getElementById('meet-save-btn');
+    if (btn) { btn.textContent = '✓ Сохранено'; btn.style.background = 'var(--green)'; }
+    toast('Совещание сохранено','ok');
+  }
 }
 
 function clearMeeting() {
   _meetingData={date:'',day:'',loc:'',time:'',part:'',agenda:''};
+  _meetingSaved = false;
   ['mDate','mLoc','mTime','mPart','mAgenda'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
 }
 
