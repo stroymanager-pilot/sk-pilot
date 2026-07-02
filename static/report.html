@@ -1081,15 +1081,15 @@ function renderRemarks() {
   // Собираем все замечания из входного, операционного и приёмочного контроля
   const icRemarks = (S.inputControl||[]).filter(r=>r.deviation_note).map(r=>({
     source:'Входной контроль', item:r.material_name||'—', section:r.section_name||'—',
-    note:r.deviation_note
+    note:r.deviation_note, status:r.status||''
   }));
   const ocRemarks = ((S.report&&S.report.operational_control)||[]).filter(r=>r.deviation_note).map(r=>({
     source:'Операционный контроль', item:r.work_stage||'—', section:r.section_name||'—',
-    note:r.deviation_note
+    note:r.deviation_note, status:r.status||''
   }));
   const acRemarks = (S.acceptanceControl||[]).filter(r=>r.deviation_note).map(r=>({
     source:'Приёмочный контроль', item:r.work_stage||'—', section:r.section_name||'—',
-    note:r.deviation_note
+    note:r.deviation_note, status:r.status||''
   }));
   const allRemarks = [...icRemarks, ...ocRemarks, ...acRemarks];
   if (!allRemarks.length) return `
@@ -1106,7 +1106,7 @@ function renderRemarks() {
           <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:3px">${esc(r.source)}</div>
           <div style="font-size:13px;font-weight:600;color:var(--text)">${esc(r.item)}</div>
           ${r.section&&r.section!=='—'?`<div style="font-size:12px;color:var(--text3)">${esc(r.section)}</div>`:''}
-          <div style="font-size:13px;color:var(--red);margin-top:4px">⚠ ${esc(r.note)}</div>
+          ${_ctrlStatus(r.status, r.note)}
         </div>`).join('')}
     </div>`;
 }
