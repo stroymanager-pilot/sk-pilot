@@ -916,7 +916,11 @@ def serve_upload(filename):
 @app.get('/api/admin/photo_check')
 def photo_check():
     """Диагностика: проверяем какие фото есть в БД и существуют ли файлы на диске"""
+    user_id = request.args.get('user_id')
     with db_conn() as db:
+        u = db.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
+        if not u or u['role'] != 'admin':
+            return err('Доступ запрещён', 403)
         rows = db.execute("""
             SELECT ph.id, ph.file_path, ph.caption, dr.report_date,
                    u.full_name as engineer, o.name as object_name
@@ -930,7 +934,7 @@ def photo_check():
         for r in rows:
             fpath = os.path.join(UPLOAD_FOLDER, r['file_path']) if r['file_path'] else None
             exists = os.path.isfile(fpath) if fpath else False
-            result.append({**dict(r), 'file_exists': exists, 'upload_folder': UPLOAD_FOLDER})
+            result.append({**dict(r), 'file_exists': exists})
         return ok(result)
 
 # ─────────────────────────────────────────────────────────
@@ -1003,7 +1007,11 @@ def delete_ks2_check(ks2_id):
 
 @app.post('/api/migrate')
 def run_migration():
+    user_id = request.args.get('user_id')
     with db_conn() as db:
+        u = db.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
+        if not u or u['role'] != 'admin':
+            return err('Доступ запрещён', 403)
         try:
             db.executescript("""
             CREATE TABLE IF NOT EXISTS acceptance_control (
@@ -1049,7 +1057,11 @@ def run_migration():
 
 @app.post('/api/fix_duplicates')
 def fix_duplicates():
+    user_id = request.args.get('user_id')
     with db_conn() as db:
+        u = db.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
+        if not u or u['role'] != 'admin':
+            return err('Доступ запрещён', 403)
         try:
             # Remove duplicate sections — keep only the one with min id per (object_id, name)
             db.execute("""
@@ -1561,7 +1573,11 @@ def my_photos():
 
 @app.post('/api/migrate_v2')
 def migrate_v2():
+    user_id = request.args.get('user_id')
     with db_conn() as db:
+        u = db.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
+        if not u or u['role'] != 'admin':
+            return err('Доступ запрещён', 403)
         try:
             db.executescript("""
             CREATE TABLE IF NOT EXISTS projects (
@@ -1634,4 +1650,4 @@ if __name__ == '__main__':
     init_db()
     print("🚀 Сервер запущен: http://localhost:5000")
     print("📋 API документация: http://localhost:5000/api/objects")
-    app.run(debug=True, host='0.0.0.0', port=5001)
+    app.run(debug=False, host='0.0.0.0', port=5001)
