@@ -1397,8 +1397,9 @@ async function saveMeeting(silent=false, force=false) {
   const data={location:location||'Совещание',time,participants:part,agenda,engineer_id:userId};
   if(S.meetingId) await fetch(`${API}/api/meetings/${S.meetingId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
   else { const r=await fetch(`${API}/api/reports/${S.reportId}/meetings`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(r=>r.json()); S.meetingId=r.data?.id||null; }
-  // Сохраняем agenda в localStorage — перенесётся в следующую сводку
-  if(agenda) {
+  // Сохраняем agenda в localStorage — перенесётся в следующую сводку.
+  // Пишем при явном сохранении (не silent), включая пустую — чтобы удаление запомнилось.
+  if(!silent) {
     const def=JSON.parse(localStorage.getItem('meetingDefaults')||'{}');
     localStorage.setItem('meetingDefaults', JSON.stringify({...def, agenda}));
   }
