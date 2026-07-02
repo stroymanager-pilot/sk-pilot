@@ -587,7 +587,7 @@ const _draftFields = {
   acceptance:  ['acStage','acOps','acMethod','acSec','acStageCon','acSec_status','acSec_dev'],
   ks2:         ['ks2Con','ks2Work','ks2Num','ks2Num3'],
   // чекбоксы КС-2 хранятся под отдельным ключом _cb
-  prescriptions: ['preNum','preDate','preDeadline','preSec','preStatus','preTjId'],
+  prescriptions: ['preNum','preDate','preDeadline','preSec','preStatus'],
 };
 const _draftCheckboxes = {
   ks2: ['ks2Ks6a','ks2Id'],
@@ -875,6 +875,16 @@ async function saveAllPersonnel(silent=false) {
 }
 
 // ── INPUT CONTROL ──
+function _preStatusStyle(status) {
+  switch(status) {
+    case 'Выполнено':    return 'background:var(--green-pale);color:var(--green)';
+    case 'Просрочено':   return 'background:var(--red-pale);color:var(--red)';
+    case 'На подписании':return 'background:var(--amber-pale);color:var(--amber)';
+    case 'Черновик':     return 'background:var(--surface2);color:var(--text3)';
+    case 'Выдано':
+    default:             return 'background:#e8eef8;color:var(--navy3)';
+  }
+}
 function _ctrlStatus(status, deviation_note) {
   if (status === 'Отклонение выявлено' || (!status && deviation_note)) {
     return `<div style="font-size:12px;color:#E08A00;margin-top:2px">⚠ Принято с замечанием${deviation_note?'<br><span style="color:var(--text3)">'+esc(deviation_note)+'</span>':''}</div>`;
@@ -1152,8 +1162,9 @@ function renderPrescriptions() {
             <select id="preStatus"><option>Выдано</option><option>На подписании</option><option>Выполнено</option><option>Просрочено</option><option>Черновик</option></select>
           </div>
         </div>
-        <label class="fl">ID в TeamJect</label><input id="preTjId" placeholder="Для интеграции">
-        <button class="btn-p" style="margin-top:10px" onclick="savePrescription()">+ Добавить</button>
+        <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
+          <button class="btn-p" style="width:100%" onclick="savePrescription()">+ Добавить предписание</button>
+        </div>
       </div>
     </div>`:''}
     ${S.prescriptions.length?`<div class="card">
@@ -1161,7 +1172,7 @@ function renderPrescriptions() {
       ${S.prescriptions.map(p=>`<div style="padding:10px 0;border-bottom:1px solid var(--surface2)">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <div><span style="font-family:var(--mono);font-weight:700">${p.number||'—'}</span>
-          <span style="font-size:11px;font-weight:700;background:var(--amber-pale);color:var(--amber);padding:2px 8px;border-radius:10px;margin-left:6px">${p.status||'—'}</span></div>
+          <span style="font-size:11px;font-weight:700;${_preStatusStyle(p.status)};padding:2px 8px;border-radius:10px;margin-left:6px">${p.status||'—'}</span></div>
           ${!S.isReadonly?`<button class="p-rm" onclick="deletePre(${p.id})">✕</button>`:''}
         </div>
         <div style="font-size:12px;color:var(--text3);margin-top:3px">Выдано: ${fmtDate(p.issue_date)} · Срок устранения: ${fmtDate(p.deadline)} · ${esc(p.section_name)||'—'}</div>
@@ -1179,9 +1190,13 @@ async function savePrescription() {
     await fetch(`${API}/api/reports/${S.reportId}/prescriptions`,{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({number:num,issue_date:document.getElementById('preDate').value||dateStr,
         deadline:document.getElementById('preDeadline').value||null,status:document.getElementById('preStatus').value,
-        section_id:document.getElementById('preSec').value,tj_prescription_id:document.getElementById('preTjId').value||null})});
+        section_id:document.getElementById('preSec').value,tj_prescription_id:null})});
     const r=await fetch(`${API}/api/reports/${S.reportId}`).then(r=>r.json());
-    S.prescriptions=r.data.prescriptions_log||[]; delete _formDrafts['prescriptions']; toast('Добавлено','ok'); showStep(currentStep);
+    S.prescriptions=r.data.prescriptions_log||[];
+    ['preNum','preDate','preDeadline'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    const ps=document.getElementById('preStatus');if(ps)ps.value='Выдано';
+    const pc=document.getElementById('preSec');if(pc)pc.selectedIndex=0;
+    delete _formDrafts['prescriptions']; toast('Добавлено','ok'); showStep(currentStep);
   } catch(e) { toast('Ошибка: '+e.message,'err'); } finally { setSaving(false); }
 }
 async function deletePre(id) {
@@ -1704,7 +1719,7 @@ async function openPastReport(id, date) {
       <div style="padding:7px 0;border-bottom:1px solid var(--surface2)">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
           <div style="font-size:13px;font-weight:600">${x.number?'№ '+esc(x.number):'Предписание'}</div>
-          ${x.status?`<div style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:${x.status==='closed'?'var(--green-pale)':'var(--amber-pale)'};color:${x.status==='closed'?'var(--green)':'var(--amber)'}">${esc(x.status)}</div>`:''}
+          ${x.status?`<div style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;${_preStatusStyle(x.status)}">${esc(x.status)}</div>`:''}
         </div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">${[x.issue_date?'Дата: '+esc(x.issue_date):'',x.deadline?'Срок: '+esc(x.deadline):'',x.section_name?esc(x.section_name):''].filter(Boolean).join(' · ')}</div>
       </div>`).join(''):'')}
