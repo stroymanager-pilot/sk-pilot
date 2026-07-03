@@ -96,6 +96,12 @@ def auto_migrate():
             object_work TEXT, ks2_number TEXT,
             has_ks6a INTEGER DEFAULT 0, has_id INTEGER DEFAULT 0
         );
+        CREATE TABLE IF NOT EXISTS partner_projects (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            partner_id INTEGER NOT NULL,
+            project_id INTEGER NOT NULL,
+            UNIQUE(partner_id, project_id)
+        );
         """)
         db.commit()
         migrations = [
@@ -131,6 +137,7 @@ def auto_migrate():
         # Личные участки (user_sections) имеют свои id, которые не совпадают с sections → constraint failed.
         _fix_section_id_fk(db)
         _fix_personnel_contractor_fk(db)
+        _migrate_partner_projects(db)
     finally:
         db.close()
 
@@ -171,6 +178,29 @@ def _fix_personnel_contractor_fk(db):
         print(f"⚠️  _fix_personnel_contractor_fk failed: {e}")
     finally:
         db.execute("PRAGMA foreign_keys = ON")
+
+
+def _migrate_partner_projects(db):
+    """Переносит привязки partners.project_id → partner_projects (ШАГ 1 many-to-many).
+    Идемпотентна: INSERT OR IGNORE по UNIQUE(partner_id, project_id)."""
+    rows = db.execute("SELECT id, name, project_id FROM partners").fetchall()
+    with_proj = [r for r in rows if r['project_id'] is not None]
+    without_proj = [r for r in rows if r['project_id'] is None]
+    migrated = 0
+    for r in with_proj:
+        cur = db.execute(
+            "INSERT OR IGNORE INTO partner_projects (partner_id, project_id) VALUES (?,?)",
+            (r['id'], r['project_id'])
+        )
+        migrated += cur.rowcount
+    if migrated or with_proj:
+        db.commit()
+    print(f"📋 partner_projects: перенесено {migrated} привязок из {len(with_proj)} партнёров с project_id")
+    if without_proj:
+        names = ', '.join(r['name'] for r in without_proj)
+        print(f"⚠️  Партнёры без project_id ({len(without_proj)} шт.) — потребуется ручная привязка: {names}")
+    else:
+        print("✅ Все партнёры имели project_id — ручная привязка не нужна")
 
 
 def _fix_section_id_fk(db):

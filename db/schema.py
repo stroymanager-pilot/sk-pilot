@@ -208,6 +208,15 @@ def init_db():
         created_at      TEXT DEFAULT (datetime('now'))
     );
 
+    -- Связь партнёров с проектами (many-to-many).
+    -- Без жёстких FK — логическая связь по id.
+    CREATE TABLE IF NOT EXISTS partner_projects (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        partner_id INTEGER NOT NULL,
+        project_id INTEGER NOT NULL,
+        UNIQUE(partner_id, project_id)
+    );
+
     -- ─────────────────────────────────────────────
     -- ИНДЕКСЫ для быстрых запросов
     -- ─────────────────────────────────────────────
