@@ -121,6 +121,7 @@ def auto_migrate():
             ("ALTER TABLE users ADD COLUMN is_active INTEGER DEFAULT 1", "users.is_active"),
             ("ALTER TABLE users ADD COLUMN can_view_all INTEGER DEFAULT 0", "users.can_view_all"),
             ("ALTER TABLE partners ADD COLUMN project_id INTEGER", "partners.project_id"),
+            ("ALTER TABLE partners ADD COLUMN work_type TEXT", "partners.work_type"),
             ("ALTER TABLE operational_control ADD COLUMN contractor_id INTEGER", "operational_control.contractor_id"),
             ("ALTER TABLE acceptance_control ADD COLUMN contractor_id INTEGER", "acceptance_control.contractor_id"),
             ("ALTER TABLE input_control ADD COLUMN contractor_id INTEGER", "input_control.contractor_id"),
@@ -1195,6 +1196,33 @@ def project_objects(proj_id):
 # ПАРТНЁРЫ (настраивает Админ)
 # ─────────────────────────────────────────────────────────
 
+def _attach_partner_projects(db, partners_list):
+    """Добавляет поле project_ids (список) к каждому партнёру."""
+    if not partners_list:
+        return partners_list
+    ids = [p['id'] for p in partners_list]
+    placeholders = ','.join('?' * len(ids))
+    rows = db.execute(
+        f"SELECT partner_id, project_id FROM partner_projects WHERE partner_id IN ({placeholders})",
+        ids
+    ).fetchall()
+    proj_map = {}
+    for r in rows:
+        proj_map.setdefault(r['partner_id'], []).append(r['project_id'])
+    for p in partners_list:
+        p['project_ids'] = proj_map.get(p['id'], [])
+    return partners_list
+
+def _save_partner_projects(db, partner_id, project_ids):
+    """Атомарно обновляет связи партнёра с проектами.
+    Синхронизирует partners.project_id с первым выбранным (для совместимости с шагом 2)."""
+    db.execute("DELETE FROM partner_projects WHERE partner_id=?", (partner_id,))
+    for pid in project_ids:
+        db.execute("INSERT OR IGNORE INTO partner_projects (partner_id, project_id) VALUES (?,?)",
+                   (partner_id, pid))
+    compat_project_id = project_ids[0] if project_ids else None
+    db.execute("UPDATE partners SET project_id=? WHERE id=?", (compat_project_id, partner_id))
+
 @app.get('/api/partners')
 def list_partners():
     with db_conn() as db:
@@ -1206,32 +1234,42 @@ def list_partners():
             ).fetchall()
         else:
             rows = db.execute("SELECT * FROM partners WHERE is_active=1 ORDER BY name").fetchall()
-        return ok(rows_to_list(rows))
+        partners = rows_to_list(rows)
+        return ok(_attach_partner_projects(db, partners))
 
 @app.post('/api/partners')
 def create_partner():
     d = request.json or {}
     if not d.get('name'): return err('name обязателен')
+    project_ids = [int(x) for x in (d.get('project_ids') or []) if x]
+    compat_pid = project_ids[0] if project_ids else None
     with db_conn() as db:
-        cur = db.execute("""INSERT INTO partners (name, type, address, contact_name, contact_role, inn, phone, email, notes, project_id)
-            VALUES (?,?,?,?,?,?,?,?,?,?)""",
+        cur = db.execute(
+            "INSERT INTO partners (name, type, address, contact_name, contact_role, inn, phone, email, notes, work_type, project_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (d['name'], d.get('type'), d.get('address'), d.get('contact_name'),
-             d.get('contact_role'), d.get('inn'), d.get('phone'), d.get('email'), d.get('notes'),
-             d.get('project_id') or None))
+             d.get('contact_role'), d.get('inn'), d.get('phone'), d.get('email'),
+             d.get('notes'), d.get('work_type'), compat_pid))
+        pid = cur.lastrowid
+        _save_partner_projects(db, pid, project_ids)
         db.commit()
-        row = db.execute("SELECT * FROM partners WHERE id=?", (cur.lastrowid,)).fetchone()
-        return ok(dict(row)), 201
+        row = db.execute("SELECT * FROM partners WHERE id=?", (pid,)).fetchone()
+        result = dict(row)
+        result['project_ids'] = project_ids
+        return ok(result), 201
 
 @app.patch('/api/partners/<int:pid>')
 def update_partner(pid):
     d = request.json or {}
     with db_conn() as db:
-        fields = ['name', 'type', 'address', 'contact_name', 'contact_role', 'inn', 'phone', 'email', 'notes', 'is_active', 'project_id']
+        fields = ['name', 'type', 'address', 'contact_name', 'contact_role', 'inn', 'phone', 'email', 'notes', 'is_active', 'work_type']
         updates = {k: v for k, v in d.items() if k in fields}
         if updates:
             sql = ', '.join(f"{k}=?" for k in updates)
             db.execute(f"UPDATE partners SET {sql} WHERE id=?", list(updates.values()) + [pid])
-            db.commit()
+        if 'project_ids' in d:
+            project_ids = [int(x) for x in (d['project_ids'] or []) if x]
+            _save_partner_projects(db, pid, project_ids)
+        db.commit()
         return ok()
 
 @app.delete('/api/partners/<int:pid>')

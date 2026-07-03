@@ -282,8 +282,11 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
       </div>
       <div class="form-row"><label class="fl">Email</label><input id="partEmail" placeholder="info@company.ru"></div>
       <div class="form-row"><label class="fl">Адрес</label><input id="partAddr" placeholder="г. Санкт-Петербург..."></div>
-      <div class="form-row"><label class="fl">Проект <span style="font-weight:400;color:var(--text3)">(оставьте пустым — виден во всех проектах)</span></label>
-        <select id="partProject"><option value="">— все проекты —</option></select>
+      <div class="form-row"><label class="fl">Вид работ</label><input id="partWork" placeholder="Напр.: Монолитные работы, электромонтаж"></div>
+      <div class="form-row">
+        <label class="fl">Проекты <span style="font-weight:400;color:var(--text3)">(отметьте, где работает этот подрядчик)</span></label>
+        <div id="partProjectChecks" style="display:flex;flex-direction:column;gap:6px;margin-top:4px"></div>
+        <div style="font-size:12px;color:var(--text3);margin-top:4px">Если не отмечен ни один проект — подрядчик не будет виден инженерам.</div>
       </div>
     </div>
     <div class="modal-footer">
@@ -762,8 +765,21 @@ async function removeEngineerFromObj(uid) {
 }
 
 // ── ПАРТНЁРЫ ──
+function _renderPartnerProjectChecks(selectedIds) {
+  const container = document.getElementById('partProjectChecks');
+  if (!state.projects.length) { container.innerHTML = '<span style="color:var(--text3);font-size:13px">Проектов нет</span>'; return; }
+  container.innerHTML = state.projects.map(p => `
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px">
+      <input type="checkbox" id="partProj_${p.id}" value="${p.id}" ${selectedIds.includes(p.id)?'checked':''} style="width:16px;height:16px;flex-shrink:0">
+      <span>${esc(p.name)}</span>
+    </label>`).join('');
+}
+function _getCheckedProjectIds() {
+  return state.projects
+    .filter(p => { const el = document.getElementById('partProj_'+p.id); return el && el.checked; })
+    .map(p => p.id);
+}
 function openNewPartner() {
-  // Очищаем форму перед добавлением нового
   document.getElementById('editPartnerId').value = '';
   document.getElementById('partName').value = '';
   document.getElementById('partType').value = 'Заказчик';
@@ -773,13 +789,9 @@ function openNewPartner() {
   document.getElementById('partPhone').value = '';
   document.getElementById('partEmail').value = '';
   document.getElementById('partAddr').value = '';
-  document.getElementById('partProject').value = '';
+  document.getElementById('partWork').value = '';
   document.getElementById('modalPartnerTitle').textContent = 'Новый партнёр';
-  // Заполняем список проектов в селекте
-  const sel = document.getElementById('partProject');
-  if (sel.options.length <= 1) {
-    state.projects.forEach(p => { const o=document.createElement('option'); o.value=p.id; o.textContent=p.name; sel.appendChild(o); });
-  }
+  _renderPartnerProjectChecks([]);
   openModal('partner');
 }
 
@@ -794,7 +806,7 @@ async function loadPartners() {
       <div class="list-avatar">${typeIco[p.type]||'🤝'}</div>
       <div class="list-body">
         <div class="list-name">${esc(p.name)}</div>
-        <div class="list-sub">${esc(p.type||'')}${p.contact_name?' · '+esc(p.contact_name):''}${p.phone?' · '+esc(p.phone):''}</div>
+        <div class="list-sub">${esc(p.type||'')}${p.work_type?' · '+esc(p.work_type):''}${p.contact_name?' · '+esc(p.contact_name):''}${(p.project_ids&&p.project_ids.length)?` · ${p.project_ids.length} пр-т${p.project_ids.length>1?'а':''}`:' · без проекта'}</div>
       </div>
       <div class="list-actions">
         <span class="badge badge-type">${esc(p.type||'—')}</span>
@@ -806,26 +818,29 @@ async function loadPartners() {
 
 async function savePartner() {
   const id = document.getElementById('editPartnerId').value;
-  const projVal = document.getElementById('partProject').value;
-  const data = {name:document.getElementById('partName').value.trim(),type:document.getElementById('partType').value,
-    contact_name:document.getElementById('partContact').value,contact_role:document.getElementById('partRole').value,
-    inn:document.getElementById('partInn').value,phone:document.getElementById('partPhone').value,
-    email:document.getElementById('partEmail').value,address:document.getElementById('partAddr').value,
-    project_id: projVal ? parseInt(projVal) : null};
+  const data = {
+    name: document.getElementById('partName').value.trim(),
+    type: document.getElementById('partType').value,
+    contact_name: document.getElementById('partContact').value,
+    contact_role: document.getElementById('partRole').value,
+    inn: document.getElementById('partInn').value,
+    phone: document.getElementById('partPhone').value,
+    email: document.getElementById('partEmail').value,
+    address: document.getElementById('partAddr').value,
+    work_type: document.getElementById('partWork').value.trim(),
+    project_ids: _getCheckedProjectIds()
+  };
   if (!data.name) { toast('Укажите название','err'); return; }
-  if (id) await fetch(`${API}/api/partners/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
-  else await fetch(`${API}/api/partners`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  const r = await fetch(id ? `${API}/api/partners/${id}` : `${API}/api/partners`,
+    {method: id ? 'PATCH' : 'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)}
+  ).then(x=>x.json());
+  if (r.ok === false) { toast(r.error||'Ошибка','err'); return; }
   closeModal('partner'); toast('Сохранено','ok'); loadPartners();
 }
 
 function editPartner(id) {
   const p = state.partners.find(p=>p.id===id);
   if (!p) return;
-  // Заполняем список проектов если не заполнен
-  const sel = document.getElementById('partProject');
-  if (sel.options.length <= 1) {
-    state.projects.forEach(pr => { const o=document.createElement('option'); o.value=pr.id; o.textContent=pr.name; sel.appendChild(o); });
-  }
   document.getElementById('editPartnerId').value = id;
   document.getElementById('partName').value = p.name||'';
   document.getElementById('partType').value = p.type||'Заказчик';
@@ -835,8 +850,9 @@ function editPartner(id) {
   document.getElementById('partPhone').value = p.phone||'';
   document.getElementById('partEmail').value = p.email||'';
   document.getElementById('partAddr').value = p.address||'';
-  document.getElementById('partProject').value = p.project_id||'';
+  document.getElementById('partWork').value = p.work_type||'';
   document.getElementById('modalPartnerTitle').textContent = 'Редактировать партнёра';
+  _renderPartnerProjectChecks(p.project_ids || []);
   openModal('partner');
 }
 
