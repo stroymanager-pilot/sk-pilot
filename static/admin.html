@@ -293,6 +293,27 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
   </div>
 </div>
 
+<!-- MODAL ОБЪЕКТ (редактирование) -->
+<div class="modal-bg" id="modal-object">
+  <div class="modal">
+    <div class="modal-h">
+      <span class="modal-title">Редактировать объект</span>
+      <button class="modal-close" onclick="closeModal('object')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editObjectId">
+      <input type="hidden" id="editObjectProjId">
+      <div class="form-row"><label class="fl">Название объекта <span style="color:var(--red)">*</span></label><input id="objName" placeholder="ЖК «Пример», корпус 1"></div>
+      <div class="form-row"><label class="fl">Адрес</label><input id="objAddress" placeholder="г. Санкт-Петербург, ул. Примерная, д. 1"></div>
+      <div class="form-row"><label class="fl">Заказчик</label><input id="objClient" placeholder="ООО «Заказчик»"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('object')">Отмена</button>
+      <button class="btn btn-primary" onclick="saveObject()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL ИНЖЕНЕР -->
 <div class="modal-bg" id="modal-engineer">
   <div class="modal">
@@ -658,12 +679,25 @@ async function deleteContractor(id) {
 async function editObject(objId, projId) {
   const obj = state.objects.find(o=>o.id===objId);
   if (!obj) return;
-  const name = prompt('Название объекта:', obj.name);
-  if (!name) return;
-  const address = prompt('Адрес:', obj.address||'') || '';
-  await fetch(`${API}/api/objects/${objId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({name,address})});
-  toast('Объект обновлён','ok'); await init(); loadProjects();
+  document.getElementById('editObjectId').value = objId;
+  document.getElementById('editObjectProjId').value = projId || '';
+  document.getElementById('objName').value = obj.name || '';
+  document.getElementById('objAddress').value = obj.address || '';
+  document.getElementById('objClient').value = obj.client_name || '';
+  openModal('object');
+}
+async function saveObject() {
+  const objId = document.getElementById('editObjectId').value;
+  const name = document.getElementById('objName').value.trim();
+  if (!name) { toast('Название обязательно','err'); return; }
+  const address = document.getElementById('objAddress').value.trim();
+  const client_name = document.getElementById('objClient').value.trim();
+  const r = await fetch(`${API}/api/objects/${objId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({name, address, client_name})}).then(x=>x.json());
+  if (r.ok === false) { toast(r.error||'Ошибка','err'); return; }
+  closeModal('object');
+  toast('Объект обновлён','ok');
+  await init(); loadProjects();
 }
 
 // ── ИНЖЕНЕРЫ ОБЪЕКТА ──
