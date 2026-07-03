@@ -373,12 +373,14 @@ def get_object(obj_id):
         # Автосинхронизация: партнёры проекта ↔ подрядчики объекта
         obj_project_id = row['project_id']
         # Все партнёры (активные и нет) — чтобы знать "партнёрские" имена
-        all_partner_rows = db.execute("SELECT name, type, project_id, is_active FROM partners").fetchall()
+        all_partner_rows = db.execute("SELECT id, name, type, work_type, is_active FROM partners").fetchall()
         all_partner_names = {p['name'] for p in all_partner_rows}
-        # Активные партнёры именно этого проекта
+        # Активные партнёры этого проекта — по partner_projects (many-to-many)
         if obj_project_id:
-            proj_partners = [p for p in all_partner_rows
-                             if p['is_active'] and p['project_id'] == obj_project_id]
+            linked_ids = {r['partner_id'] for r in
+                          db.execute("SELECT partner_id FROM partner_projects WHERE project_id=?",
+                                     (obj_project_id,)).fetchall()}
+            proj_partners = [p for p in all_partner_rows if p['is_active'] and p['id'] in linked_ids]
         else:
             proj_partners = []
         proj_partner_names = {p['name'] for p in proj_partners}
@@ -395,8 +397,9 @@ def get_object(obj_id):
                 if not existing_map[p['name']]['active']:
                     db.execute("UPDATE contractors SET is_active=1 WHERE id=?", (existing_map[p['name']]['id'],))
             else:
+                wt = p['work_type'] or p['type']
                 db.execute("INSERT INTO contractors (object_id, name, work_type) VALUES (?,?,?)",
-                           (obj_id, p['name'], p['type']))
+                           (obj_id, p['name'], wt))
         db.commit()
 
         contractors = db.execute("SELECT * FROM contractors WHERE object_id=? AND is_active=1", (obj_id,)).fetchall()
