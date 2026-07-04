@@ -523,7 +523,7 @@ function updatePills() {
     if (!pill) return;
     pill.className = 'step-pill'+(i===currentStep?' active':'');
     let cnt=0;
-    if(s.id==='remarks') cnt=S.remarks.filter(r=>r.status==='open').length;
+    if(s.id==='remarks'){const _hr=r=>(r.status&&r.status.trim())||r.deviation_note;cnt=(S.inputControl||[]).filter(_hr).length+((S.report?.operational_control)||[]).filter(_hr).length+(S.acceptanceControl||[]).filter(_hr).length;}
     if(s.id==='prescriptions') cnt=S.prescriptions.length;
     if(s.id==='input') cnt=S.inputControl.length;
     if(s.id==='operational') cnt=(S.report?.operational_control||[]).length;
