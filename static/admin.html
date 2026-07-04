@@ -154,10 +154,10 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
   <div class="page-h">Дашборд</div>
   <div class="page-d" id="dashDate"></div>
   <div class="stats" id="dashStats">
-    <div class="stat-card"><div class="stat-val" id="statProjects">—</div><div class="stat-lbl">Проектов</div></div>
-    <div class="stat-card"><div class="stat-val" id="statObjects">—</div><div class="stat-lbl">Объектов</div></div>
-    <div class="stat-card"><div class="stat-val" id="statEngineers">—</div><div class="stat-lbl">Инженеров</div></div>
-    <div class="stat-card"><div class="stat-val" id="statReports">—</div><div class="stat-lbl">Сводок сегодня</div></div>
+    <div class="stat-card"><div class="stat-val" id="statProjects">—</div><div class="stat-lbl" id="statProjectsLbl">проектов</div></div>
+    <div class="stat-card"><div class="stat-val" id="statObjects">—</div><div class="stat-lbl" id="statObjectsLbl">объектов</div></div>
+    <div class="stat-card"><div class="stat-val" id="statEngineers">—</div><div class="stat-lbl" id="statEngineersLbl">инженеров</div></div>
+    <div class="stat-card"><div class="stat-val" id="statReports">—</div><div class="stat-lbl" id="statReportsLbl">сводок сегодня</div></div>
   </div>
   <div class="card">
     <div class="card-h"><span class="card-title">Последние сводки</span></div>
@@ -496,15 +496,23 @@ async function init() {
 }
 
 // ── DASHBOARD ──
+function plural(n,one,few,many){const t=n%10,h=n%100;if(t===1&&h!==11)return one;if(t>=2&&t<=4&&!(h>=12&&h<=14))return few;return many;}
+function setStat(valId, lblId, n, one, few, many, suffix) {
+  document.getElementById(valId).textContent = n;
+  document.getElementById(lblId).textContent = plural(n,one,few,many)+(suffix||'');
+}
 async function loadDashboard() {
-  document.getElementById('statProjects').textContent = state.projects.length;
-  document.getElementById('statObjects').textContent = state.objects.length;
-  document.getElementById('statEngineers').textContent = state.users.filter(u=>u.role!=='admin' && u.is_active!==0).length;
+  const nProj = state.projects.length;
+  const nObj  = state.objects.length;
+  const nEng  = state.users.filter(u=>u.role!=='admin' && u.is_active!==0).length;
+  setStat('statProjects','statProjectsLbl', nProj, 'проект','проекта','проектов');
+  setStat('statObjects','statObjectsLbl',   nObj,  'объект','объекта','объектов');
+  setStat('statEngineers','statEngineersLbl',nEng,  'инженер','инженера','инженеров');
 
   const rep = await fetch(`${API}/api/all_reports?requester_id=${userId}`).then(r=>r.json());
   const all = rep.data || [];
   const todayReps = all.filter(r=>r.report_date===today);
-  document.getElementById('statReports').textContent = todayReps.length;
+  setStat('statReports','statReportsLbl', todayReps.length, 'сводка','сводки','сводок',' сегодня');
 
   const recent = all.slice(0,10);
   document.getElementById('dashReports').innerHTML = recent.length ? `
