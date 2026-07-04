@@ -442,6 +442,7 @@ function nav(el) {
   el.classList.add('active');
   const page = el.dataset.page;
   document.getElementById('page-'+page).classList.add('active');
+  sessionStorage.setItem('adminPage', page);
   if (page==='dashboard') loadDashboard();
   else if (page==='projects') loadProjects();
   else if (page==='partners') loadPartners();
@@ -488,7 +489,9 @@ async function init() {
       const opt = document.createElement('option'); opt.value=o.id; opt.textContent=o.name; eosel.appendChild(opt);
     });
 
-    loadDashboard();
+    const savedPage = sessionStorage.getItem('adminPage');
+    const savedEl = savedPage && document.querySelector(`.sb-item[data-page="${savedPage}"]`);
+    if (savedEl) nav(savedEl); else loadDashboard();
   } catch(e) {
     console.error('Init error:', e);
     document.getElementById('dashReports').innerHTML = '<div class="empty">Ошибка загрузки: '+e.message+'</div>';
