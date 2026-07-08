@@ -179,8 +179,11 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 <div class="page" id="page-partners">
   <div class="page-h">Партнёры</div>
   <div class="page-d">Заказчики, генподрядчики, субподрядчики</div>
-  <div style="margin-bottom:14px">
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px">
     <button class="btn btn-primary" onclick="openNewPartner()">+ Добавить партнёра</button>
+    <div class="filters" style="margin-bottom:0">
+      <select id="partnerProjectFilter" onchange="renderPartnersList()"><option value="">Все проекты</option></select>
+    </div>
   </div>
   <div id="partnersList"><div class="empty">Загрузка...</div></div>
 </div>
@@ -817,22 +820,48 @@ function openNewPartner() {
 async function loadPartners() {
   const res = await fetch(`${API}/api/partners`).then(r=>r.json());
   state.partners = res.data || [];
+  // Заполняем фильтр проектов (один раз, если пустой)
+  const fsel = document.getElementById('partnerProjectFilter');
+  if (fsel && fsel.options.length <= 1) {
+    state.projects.forEach(p => { const o=document.createElement('option'); o.value=p.id; o.textContent=p.name; fsel.appendChild(o); });
+    const oNone = document.createElement('option'); oNone.value='none'; oNone.textContent='Без проектов'; fsel.appendChild(oNone);
+  }
+  renderPartnersList();
+}
+function renderPartnersList() {
   const el = document.getElementById('partnersList');
-  if (!state.partners.length) { el.innerHTML='<div class="card"><div class="empty"><div class="empty-ico">🤝</div>Партнёров нет</div></div>'; return; }
+  const filterVal = (document.getElementById('partnerProjectFilter')||{}).value || '';
+  const projMap = Object.fromEntries(state.projects.map(p=>[p.id, p.name]));
+  let list = state.partners;
+  if (filterVal === 'none') {
+    list = list.filter(p => !(p.project_ids && p.project_ids.length));
+  } else if (filterVal) {
+    const fid = parseInt(filterVal);
+    list = list.filter(p => p.project_ids && p.project_ids.includes(fid));
+  }
+  if (!list.length) { el.innerHTML='<div class="card"><div class="empty"><div class="empty-ico">🤝</div>Нет партнёров</div></div>'; return; }
   const typeIco = {Заказчик:'🏛',Генподрядчик:'🏗',Субподрядчик:'🔧',Проектировщик:'📐',Другое:'🤝'};
-  el.innerHTML = `<div class="card"><div style="padding:0">${state.partners.map(p=>`
-    <div class="list-item" style="${p.is_active===0?'opacity:.5':''}">
+  el.innerHTML = `<div class="card"><div style="padding:0">${list.map(p=>{
+    let projStr;
+    if (p.project_ids && p.project_ids.length) {
+      const names = p.project_ids.map(id=>projMap[id]||'?');
+      projStr = names.length > 2 ? esc(names.slice(0,2).join(', '))+` +${names.length-2}` : esc(names.join(', '));
+    } else {
+      projStr = '<span style="color:var(--text3)">без проектов</span>';
+    }
+    return `<div class="list-item" style="${p.is_active===0?'opacity:.5':''}">
       <div class="list-avatar">${typeIco[p.type]||'🤝'}</div>
       <div class="list-body">
         <div class="list-name">${esc(p.name)}</div>
-        <div class="list-sub">${esc(p.type||'')}${p.work_type?' · '+esc(p.work_type):''}${p.contact_name?' · '+esc(p.contact_name):''}${(p.project_ids&&p.project_ids.length)?` · ${p.project_ids.length} пр-т${p.project_ids.length>1?'а':''}`:' · без проекта'}</div>
+        <div class="list-sub">${esc(p.type||'')}${p.work_type?' · '+esc(p.work_type):''} · ${projStr}</div>
       </div>
       <div class="list-actions">
         <span class="badge badge-type">${esc(p.type||'—')}</span>
         <button class="btn btn-ghost btn-xs" onclick="editPartner(${p.id})">✏</button>
         <button class="btn btn-danger btn-xs" onclick="deletePartner(${p.id})">✕</button>
       </div>
-    </div>`).join('')}</div></div>`;
+    </div>`;
+  }).join('')}</div></div>`;
 }
 
 async function savePartner() {
