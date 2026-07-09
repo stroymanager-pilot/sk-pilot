@@ -395,39 +395,52 @@ def get_object(obj_id):
             return err('Объект не найден', 404)
         sections = db.execute("SELECT * FROM sections WHERE object_id=? AND is_active=1", (obj_id,)).fetchall()
 
-        # Автосинхронизация: партнёры проекта ↔ подрядчики объекта
+        # Автосинхронизация: партнёры проекта ↔ подрядчики объекта (по partner_id)
         obj_project_id = row['project_id']
-        # Все партнёры (активные и нет) — чтобы знать "партнёрские" имена
-        all_partner_rows = db.execute("SELECT id, name, type, work_type, is_active FROM partners").fetchall()
-        all_partner_names = {p['name'] for p in all_partner_rows}
         # Активные партнёры этого проекта — по partner_projects (many-to-many)
         if obj_project_id:
-            linked_ids = {r['partner_id'] for r in
-                          db.execute("SELECT partner_id FROM partner_projects WHERE project_id=?",
-                                     (obj_project_id,)).fetchall()}
-            proj_partners = [p for p in all_partner_rows if p['is_active'] and p['id'] in linked_ids]
+            proj_partners = db.execute("""
+                SELECT p.id, p.name, p.type, p.work_type
+                FROM partners p
+                JOIN partner_projects pp ON pp.partner_id = p.id
+                WHERE pp.project_id = ? AND p.is_active = 1
+            """, (obj_project_id,)).fetchall()
         else:
             proj_partners = []
-        proj_partner_names = {p['name'] for p in proj_partners}
-        # Текущие подрядчики объекта
-        existing = db.execute("SELECT id, name, work_type, is_active FROM contractors WHERE object_id=?", (obj_id,)).fetchall()
-        existing_map = {r['name']: {'id': r['id'], 'active': r['is_active'], 'work_type': r['work_type']} for r in existing}
-        # Скрываем подрядчиков, которые пришли из партнёров, но не из этого проекта
-        for name, rec in existing_map.items():
-            if name in all_partner_names and name not in proj_partner_names and rec['active']:
+        proj_partner_ids = {p['id'] for p in proj_partners}
+        # Все записи contractors этого объекта с partner_id (партнёрские)
+        existing = db.execute(
+            "SELECT id, name, work_type, is_active, partner_id FROM contractors WHERE object_id=?",
+            (obj_id,)
+        ).fetchall()
+        # Словарь partner_id → запись (только для тех, у кого partner_id IS NOT NULL)
+        existing_by_pid = {r['partner_id']: r for r in existing if r['partner_id'] is not None}
+
+        # 1. Партнёры, убранные из проекта → деактивировать их записи на объекте
+        for pid, rec in existing_by_pid.items():
+            if pid not in proj_partner_ids and rec['is_active']:
                 db.execute("UPDATE contractors SET is_active=0 WHERE id=?", (rec['id'],))
-        # Добавляем или активируем партнёров этого проекта; обновляем work_type из карточки партнёра
+
+        # 2. Партнёры проекта → создать запись если нет, обновить name/work_type если изменились
+        #    Если запись есть, но is_active=0 (убран админом вручную) — НЕ реактивировать
         for p in proj_partners:
-            if p['name'] in existing_map:
-                rec = existing_map[p['name']]
-                if not rec['active']:
-                    db.execute("UPDATE contractors SET is_active=1 WHERE id=?", (rec['id'],))
-                if p['work_type'] and p['work_type'] != rec['work_type']:
-                    db.execute("UPDATE contractors SET work_type=? WHERE id=?", (p['work_type'], rec['id']))
+            wt = p['work_type'] or p['type']
+            if p['id'] in existing_by_pid:
+                rec = existing_by_pid[p['id']]
+                updates = {}
+                if p['name'] != rec['name']:
+                    updates['name'] = p['name']
+                if wt and wt != rec['work_type']:
+                    updates['work_type'] = wt
+                if updates:
+                    sql = ', '.join(f"{k}=?" for k in updates)
+                    db.execute(f"UPDATE contractors SET {sql} WHERE id=?",
+                               list(updates.values()) + [rec['id']])
             else:
-                wt = p['work_type'] or p['type']
-                db.execute("INSERT INTO contractors (object_id, name, work_type) VALUES (?,?,?)",
-                           (obj_id, p['name'], wt))
+                db.execute(
+                    "INSERT INTO contractors (object_id, name, work_type, partner_id) VALUES (?,?,?,?)",
+                    (obj_id, p['name'], wt, p['id'])
+                )
         db.commit()
 
         contractors = db.execute("SELECT * FROM contractors WHERE object_id=? AND is_active=1", (obj_id,)).fetchall()
