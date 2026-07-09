@@ -51,6 +51,7 @@ def init_db():
         object_id       INTEGER NOT NULL REFERENCES objects(id),
         name            TEXT NOT NULL,  -- "ООО «Пинстрой»"
         work_type       TEXT,           -- вид работ по умолчанию
+        partner_id      INTEGER,        -- ссылка на partners.id (без жёсткого FK)
         is_active       INTEGER DEFAULT 1
     );
 

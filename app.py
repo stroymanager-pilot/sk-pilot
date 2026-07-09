@@ -126,6 +126,7 @@ def auto_migrate():
             ("ALTER TABLE acceptance_control ADD COLUMN contractor_id INTEGER", "acceptance_control.contractor_id"),
             ("ALTER TABLE input_control ADD COLUMN contractor_id INTEGER", "input_control.contractor_id"),
             ("ALTER TABLE input_control ADD COLUMN status TEXT DEFAULT ''", "input_control.status"),
+            ("ALTER TABLE contractors ADD COLUMN partner_id INTEGER", "contractors.partner_id"),
         ]
         for sql, label in migrations:
             try:
@@ -139,6 +140,7 @@ def auto_migrate():
         _fix_section_id_fk(db)
         _fix_personnel_contractor_fk(db)
         _migrate_partner_projects(db)
+        _migrate_contractor_partner_id(db)
     finally:
         db.close()
 
@@ -202,6 +204,29 @@ def _migrate_partner_projects(db):
         print(f"⚠️  Партнёры без project_id ({len(without_proj)} шт.) — потребуется ручная привязка: {names}")
     else:
         print("✅ Все партнёры имели project_id — ручная привязка не нужна")
+
+
+def _migrate_contractor_partner_id(db):
+    """Заполняет contractors.partner_id по совпадению имён с partners.
+    Идемпотентна: обновляет только строки с partner_id IS NULL."""
+    # Строим словарь name → partner.id (берём первого активного с таким именем)
+    partner_rows = db.execute("SELECT id, name FROM partners WHERE is_active=1").fetchall()
+    name_to_pid = {}
+    for r in partner_rows:
+        if r['name'] not in name_to_pid:
+            name_to_pid[r['name']] = r['id']
+    # Подрядчики без partner_id
+    nulls = db.execute("SELECT id, name FROM contractors WHERE partner_id IS NULL").fetchall()
+    updated = 0
+    for c in nulls:
+        pid = name_to_pid.get(c['name'])
+        if pid:
+            db.execute("UPDATE contractors SET partner_id=? WHERE id=?", (pid, c['id']))
+            updated += 1
+    remaining = len(nulls) - updated
+    if updated:
+        db.commit()
+    print(f"📋 contractors.partner_id: заполнено {updated} строк; осталось NULL (ручные): {remaining}")
 
 
 def _fix_section_id_fk(db):
