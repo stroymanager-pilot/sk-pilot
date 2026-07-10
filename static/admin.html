@@ -667,7 +667,7 @@ async function refreshContractors() {
   el.innerHTML = contractors.map(c=>{
     const fromDir = partnerNames.has(c.name);
     const action = fromDir
-      ? `<span style="font-size:11px;color:var(--text3);white-space:nowrap" title="Управляется галочками проектов в карточке партнёра">из Партнёров</span>`
+      ? `<span style="display:flex;align-items:center;gap:6px;white-space:nowrap"><span style="font-size:11px;color:var(--text3)" title="Управляется галочками проектов в карточке партнёра">из Партнёров</span><button class="btn btn-danger btn-xs" onclick="deleteContractor(${c.id})">✕</button></span>`
       : `<button class="btn btn-danger btn-xs" onclick="deleteContractor(${c.id})">✕ Удалить</button>`;
     return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
       <div style="flex:1">
