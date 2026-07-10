@@ -504,6 +504,15 @@ def update_section(sec_id):
 # ПОДРЯДЧИКИ
 # ─────────────────────────────────────────────────────────
 
+@app.get('/api/objects/<int:obj_id>/contractors/hidden')
+def get_hidden_contractors(obj_id):
+    with db_conn() as db:
+        rows = db.execute(
+            "SELECT id, name, work_type FROM contractors WHERE object_id=? AND hidden_manually=1",
+            (obj_id,)
+        ).fetchall()
+        return ok(rows_to_list(rows))
+
 @app.post('/api/objects/<int:obj_id>/contractors')
 def add_contractor(obj_id):
     d = request.json or {}
