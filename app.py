@@ -127,6 +127,7 @@ def auto_migrate():
             ("ALTER TABLE input_control ADD COLUMN contractor_id INTEGER", "input_control.contractor_id"),
             ("ALTER TABLE input_control ADD COLUMN status TEXT DEFAULT ''", "input_control.status"),
             ("ALTER TABLE contractors ADD COLUMN partner_id INTEGER", "contractors.partner_id"),
+            ("ALTER TABLE contractors ADD COLUMN hidden_manually INTEGER NOT NULL DEFAULT 0", "contractors.hidden_manually"),
         ]
         for sql, label in migrations:
             try:
@@ -410,24 +411,29 @@ def get_object(obj_id):
         proj_partner_ids = {p['id'] for p in proj_partners}
         # Все записи contractors этого объекта с partner_id (партнёрские)
         existing = db.execute(
-            "SELECT id, name, work_type, is_active, partner_id FROM contractors WHERE object_id=?",
+            "SELECT id, name, work_type, is_active, partner_id, hidden_manually FROM contractors WHERE object_id=?",
             (obj_id,)
         ).fetchall()
         # Словарь partner_id → запись (только для тех, у кого partner_id IS NOT NULL)
         existing_by_pid = {r['partner_id']: r for r in existing if r['partner_id'] is not None}
 
-        # 1. Партнёры, убранные из проекта → деактивировать их записи на объекте
+        # 1. Партнёры, убранные из проекта → деактивировать (hidden_manually не трогаем)
         for pid, rec in existing_by_pid.items():
             if pid not in proj_partner_ids and rec['is_active']:
                 db.execute("UPDATE contractors SET is_active=0 WHERE id=?", (rec['id'],))
 
         # 2. Партнёры проекта → создать запись если нет, обновить name/work_type если изменились
-        #    Если запись есть, но is_active=0 (убран админом вручную) — НЕ реактивировать
+        #    hidden_manually=1 → запись скрыта администратором вручную, НЕ трогаем вообще
+        #    hidden_manually=0 и is_active=0 → реактивировать (синх вернула партнёра в проект)
         for p in proj_partners:
             wt = p['work_type'] or p['type']
             if p['id'] in existing_by_pid:
                 rec = existing_by_pid[p['id']]
+                if rec['hidden_manually']:
+                    continue  # скрыт вручную — не реактивировать, не трогать
                 updates = {}
+                if not rec['is_active']:
+                    updates['is_active'] = 1
                 if p['name'] != rec['name']:
                     updates['name'] = p['name']
                 if wt and wt != rec['work_type']:
@@ -516,7 +522,7 @@ def add_contractor(obj_id):
 def update_contractor(c_id):
     d = request.json or {}
     with db_conn() as db:
-        fields = ['name', 'work_type', 'is_active']
+        fields = ['name', 'work_type', 'is_active', 'hidden_manually']
         updates = {k: v for k, v in d.items() if k in fields}
         if updates:
             sql = ', '.join(f"{k}=?" for k in updates)

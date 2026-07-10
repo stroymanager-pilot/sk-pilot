@@ -52,6 +52,7 @@ def init_db():
         name            TEXT NOT NULL,  -- "ООО «Пинстрой»"
         work_type       TEXT,           -- вид работ по умолчанию
         partner_id      INTEGER,        -- ссылка на partners.id (без жёсткого FK)
+        hidden_manually INTEGER NOT NULL DEFAULT 0,  -- 1 = скрыт администратором вручную
         is_active       INTEGER DEFAULT 1
     );
 

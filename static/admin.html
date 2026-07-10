@@ -695,7 +695,7 @@ async function deleteContractor(id) {
   if (!confirm('Удалить подрядчика?')) return;
   await fetch(`${API}/api/contractors/${id}`, {
     method:'PATCH', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({is_active: 0})
+    body: JSON.stringify({is_active: 0, hidden_manually: 1})
   });
   await refreshContractors();
   toast('Подрядчик удалён','ok');
