@@ -140,6 +140,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
   <div class="sb-item" data-page="photos" onclick="nav(this)"><span class="ico">📷</span> Все фото</div>
   <div class="sb-bottom">
     <button class="logout-btn" onclick="downloadExportZip()" style="margin-bottom:6px;color:rgba(255,255,255,.9);background:rgba(212,168,67,.2)">📦 Экспорт (ZIP)</button>
+    <button class="logout-btn" onclick="downloadExportDay()" style="margin-bottom:6px;color:rgba(255,255,255,.9);background:rgba(212,168,67,.15)">📅 Экспорт за день</button>
     <button class="logout-btn" onclick="downloadBackup()" style="margin-bottom:6px;color:rgba(255,255,255,.7)">💾 Резервная копия (.db)</button>
     <button class="logout-btn" onclick="logout()">← Выйти</button>
     <div style="margin-top:12px;font-size:10px;color:rgba(255,255,255,.4);font-family:'JetBrains Mono',monospace;line-height:1.5">Разработано TeamJect<br>для Stroymanager · 2026 · v1.3</div>
@@ -427,6 +428,17 @@ function downloadExportZip(projectId) {
   let url = `${API}/api/admin/export_zip?user_id=${userId}`;
   if (projectId) url += `&project_id=${projectId}`;
   a.href = url; a.click();
+}
+function downloadExportDay() {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const def = yesterday.toISOString().slice(0, 10);
+  const date = prompt('Дата экспорта (ГГГГ-ММ-ДД):', def);
+  if (!date) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { alert('Неверный формат даты'); return; }
+  const a = document.createElement('a');
+  a.href = `${API}/api/admin/export_day?user_id=${userId}&date=${date}`;
+  a.click();
 }
 
 document.getElementById('sbRole').textContent = userName;
