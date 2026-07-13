@@ -436,9 +436,19 @@ function downloadExportDay() {
   const date = prompt('Дата экспорта (ГГГГ-ММ-ДД):', def);
   if (!date) return;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { alert('Неверный формат даты'); return; }
-  const a = document.createElement('a');
-  a.href = `${API}/api/admin/export_day?user_id=${userId}&date=${date}`;
-  a.click();
+  fetch(`${API}/api/admin/export_day?user_id=${userId}&date=${date}`)
+    .then(r => {
+      const ct = r.headers.get('content-type') || '';
+      if (ct.includes('application/json')) return r.json().then(j => { throw new Error(j.error || 'Ошибка экспорта'); });
+      return r.blob();
+    })
+    .then(blob => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `export_${date}.zip`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    })
+    .catch(e => toast(e.message || 'Ошибка экспорта', 'err'));
 }
 
 document.getElementById('sbRole').textContent = userName;
