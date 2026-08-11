@@ -66,6 +66,13 @@ def auto_migrate():
     try:
         # Создаём таблицы, которые могут отсутствовать в старых БД
         db.executescript("""
+        CREATE TABLE IF NOT EXISTS organizations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            subscription_until TEXT,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
         CREATE TABLE IF NOT EXISTS projects (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL, description TEXT,
@@ -128,6 +135,9 @@ def auto_migrate():
             ("ALTER TABLE input_control ADD COLUMN status TEXT DEFAULT ''", "input_control.status"),
             ("ALTER TABLE contractors ADD COLUMN partner_id INTEGER", "contractors.partner_id"),
             ("ALTER TABLE contractors ADD COLUMN hidden_manually INTEGER NOT NULL DEFAULT 0", "contractors.hidden_manually"),
+            ("ALTER TABLE users ADD COLUMN organization_id INTEGER", "users.organization_id"),
+            ("ALTER TABLE projects ADD COLUMN organization_id INTEGER", "projects.organization_id"),
+            ("ALTER TABLE partners ADD COLUMN organization_id INTEGER", "partners.organization_id"),
         ]
         for sql, label in migrations:
             try:
@@ -142,8 +152,46 @@ def auto_migrate():
         _fix_personnel_contractor_fk(db)
         _migrate_partner_projects(db)
         _migrate_contractor_partner_id(db)
+        _migrate_organizations(db)
     finally:
         db.close()
+
+
+def _migrate_organizations(db):
+    """ШАГ 1 SaaS: создаёт организацию по умолчанию и привязывает к ней
+    существующие users / projects / partners.
+    Идемпотентна: организация создаётся только если таблица пуста;
+    organization_id проставляется только строкам, где он NULL.
+    Логику приложения не затрагивает — колонка пока нигде не читается."""
+    DEFAULT_ORG = 'Стройменеджер'
+
+    cnt = db.execute("SELECT COUNT(*) AS c FROM organizations").fetchone()['c']
+    if cnt == 0:
+        db.execute(
+            "INSERT INTO organizations (name, subscription_until, is_active) VALUES (?, NULL, 1)",
+            (DEFAULT_ORG,)
+        )
+        db.commit()
+        print(f"🏢 organizations: создана организация по умолчанию «{DEFAULT_ORG}»")
+
+    org = db.execute("SELECT id FROM organizations ORDER BY id LIMIT 1").fetchone()
+    if not org:
+        return
+    org_id = org['id']
+
+    total = 0
+    for table in ('users', 'projects', 'partners'):
+        cur = db.execute(
+            f"UPDATE {table} SET organization_id=? WHERE organization_id IS NULL",
+            (org_id,)
+        )
+        if cur.rowcount:
+            print(f"🏢 {table}.organization_id: проставлено {cur.rowcount} строк → org #{org_id}")
+        total += cur.rowcount
+    if total:
+        db.commit()
+    else:
+        print(f"🏢 organization_id: все строки уже привязаны к организации #{org_id}")
 
 def _fix_personnel_contractor_fk(db):
     """Убирает REFERENCES contractors(id) из personnel_entries.contractor_id.

@@ -63,6 +63,7 @@ def init_db():
         email       TEXT UNIQUE NOT NULL,
         role        TEXT DEFAULT 'engineer',  -- engineer / senior / admin
         password_hash TEXT,
+        organization_id INTEGER,        -- ссылка на organizations.id (без жёсткого FK)
         created_at  TEXT DEFAULT (datetime('now'))
     );
 
@@ -186,11 +187,21 @@ def init_db():
     -- ПРОЕКТЫ и ПАРТНЁРЫ
     -- ─────────────────────────────────────────────
 
+    -- Организации (SaaS-изоляция). Пока одна — 'Стройменеджер'.
+    CREATE TABLE IF NOT EXISTS organizations (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        name                TEXT NOT NULL,
+        subscription_until  TEXT,           -- NULL = без ограничения
+        is_active           INTEGER NOT NULL DEFAULT 1,
+        created_at          TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS projects (
         id              INTEGER PRIMARY KEY AUTOINCREMENT,
         name            TEXT NOT NULL,
         description     TEXT,
         tj_project_id   TEXT,
+        organization_id INTEGER,        -- ссылка на organizations.id (без жёсткого FK)
         is_active       INTEGER DEFAULT 1,
         created_at      TEXT DEFAULT (datetime('now'))
     );
@@ -206,6 +217,7 @@ def init_db():
         phone           TEXT,
         email           TEXT,
         notes           TEXT,
+        organization_id INTEGER,        -- ссылка на organizations.id (без жёсткого FK)
         is_active       INTEGER DEFAULT 1,
         created_at      TEXT DEFAULT (datetime('now'))
     );
