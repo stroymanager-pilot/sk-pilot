@@ -416,7 +416,12 @@ if (!sessionStorage.getItem('userId')) window.location.href = '/login.html';
 const userId = sessionStorage.getItem('userId');
 const userRole = sessionStorage.getItem('userRole');
 const userName = sessionStorage.getItem('userName') || 'Администратор';
-if (userRole !== 'admin') window.location.href = '/report.html';
+// Роли: platform / root / admin / senior / engineer
+const ADMIN_ROLES = {root:1, admin:1};
+const isAdminRole = r => !!ADMIN_ROLES[r];
+const ROLE_LABELS = {platform:'Оператор платформы', root:'Администратор', admin:'Администратор', senior:'Главный инженер', engineer:'Инженер СК'};
+const roleLabelOf = r => ROLE_LABELS[r] || 'Инженер СК';
+if (!isAdminRole(userRole)) window.location.href = '/report.html';
 function logout() { sessionStorage.clear(); window.location.href = '/login.html'; }
 function downloadBackup() {
   const a = document.createElement('a');
@@ -499,7 +504,7 @@ async function init() {
 
     // Fill filter selects
     const fesel = document.getElementById('filterEngineer');
-    if (fesel) state.users.filter(u=>u.role!=='admin' && u.is_active!==0).forEach(u => {
+    if (fesel) state.users.filter(u=>!isAdminRole(u.role) && u.is_active!==0).forEach(u => {
       const o = document.createElement('option'); o.value=u.id; o.textContent=u.full_name; fesel.appendChild(o);
     });
 
@@ -535,7 +540,7 @@ function setStat(valId, lblId, n, one, few, many, suffix) {
 async function loadDashboard() {
   const nProj = state.projects.length;
   const nObj  = state.objects.length;
-  const nEng  = state.users.filter(u=>u.role!=='admin' && u.is_active!==0).length;
+  const nEng  = state.users.filter(u=>!isAdminRole(u.role) && u.is_active!==0).length;
   setStat('statProjects','statProjectsLbl', nProj, 'проект','проекта','проектов');
   setStat('statObjects','statObjectsLbl',   nObj,  'объект','объекта','объектов');
   setStat('statEngineers','statEngineersLbl',nEng,  'инженер','инженера','инженеров');
@@ -785,7 +790,7 @@ async function manageEngineers(objId, objName) {
 async function refreshEngineers() {
   const res = await fetch(`${API}/api/objects/${_curEngObjId}`).then(r=>r.json());
   const assigned = res.data?.engineers || [];
-  const allUsers = state.users.filter(u => u.role !== 'admin');
+  const allUsers = state.users.filter(u => !isAdminRole(u.role));
 
   // Список назначенных
   const el = document.getElementById('modalEngineersList');
@@ -796,9 +801,9 @@ async function refreshEngineers() {
       <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
         <div style="flex:1">
           <div style="font-size:14px;font-weight:600">${esc(e.full_name||'')}</div>
-          <div style="font-size:12px;color:var(--text3)">${esc(e.role||'')}</div>
+          <div style="font-size:12px;color:var(--text3)">${esc(roleLabelOf(e.role))}</div>
         </div>
-        ${e.role !== 'admin' ? `<button class="btn btn-danger btn-xs" onclick="removeEngineerFromObj(${e.id})">✕ Убрать</button>` : ''}
+        ${!isAdminRole(e.role) ? `<button class="btn btn-danger btn-xs" onclick="removeEngineerFromObj(${e.id})">✕ Убрать</button>` : ''}
       </div>`).join('');
   }
 
@@ -984,8 +989,8 @@ async function loadEngineers() {
 
   el.innerHTML = `<div class="card"><div style="padding:0">${engineers.map(u=>{
     const initials = u.full_name.split(' ').slice(0,2).map(n=>n[0]).join('');
-    const roleLabel = u.role==='admin'?'Администратор':u.role==='senior'?'Главный инженер':'Инженер СК';
-    const badgeClass = u.role==='admin'?'badge-admin':'badge-eng';
+    const roleLabel = roleLabelOf(u.role);
+    const badgeClass = isAdminRole(u.role)?'badge-admin':'badge-eng';
     const isActive = u.is_active !== 0;
     const assigns = userAssign[u.id]||[];
     const assignText = assigns.length
@@ -1003,7 +1008,7 @@ async function loadEngineers() {
         ${u.role==='senior'?`<label id="viewAllLabel-${u.id}" title="Полный просмотр всех сводок и фото" style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;margin-top:5px;padding:3px 8px;border-radius:6px;${u.can_view_all?'background:#e4f2ec;color:#3a8c5c;font-weight:700':'background:#f0f3f9;color:#8098b8'}">
           <input type="checkbox" ${u.can_view_all?'checked':''} onchange="toggleViewAll(${u.id},this.checked)" style="cursor:pointer"><span id="viewAllTxt-${u.id}">${u.can_view_all?'Реестр: вкл':'Реестр: выкл'}</span>
         </label>`:''}
-        ${u.role!=='admin'?`
+        ${!isAdminRole(u.role)?`
         ${isActive?`<button class="btn btn-ghost btn-xs" onclick="editEngineer(${u.id})" title="Редактировать">✏</button>`:''}
         ${isActive
           ?`<button class="btn btn-danger btn-xs" onclick="deactivateEngineer(${u.id},'${esc(u.full_name)}')" title="В архив">📦</button>`

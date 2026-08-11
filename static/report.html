@@ -276,7 +276,7 @@ const userId = parseInt(sessionStorage.getItem('userId'));
 const userName = sessionStorage.getItem('userName') || 'Инженер';
 const userRole = sessionStorage.getItem('userRole');
 function logout() { sessionStorage.clear(); window.location.href = '/login.html'; }
-if (userRole === 'admin') window.location.href = '/admin.html';
+if (userRole === 'root' || userRole === 'admin') window.location.href = '/admin.html';
 
 const today = new Date();
 const dateStr = today.toISOString().split('T')[0];

@@ -60,6 +60,18 @@ def _process_image(src_path: str) -> str:
 app = Flask(__name__, static_folder='static', static_url_path='')
 init_db()  # Ensure DB exists on startup
 
+# ─────────────────────────────────────────────────────────────
+# РОЛИ
+#   platform — оператор платформы (управление организациями; прав внутри
+#              организации не имеет)
+#   root     — главный админ организации
+#   admin    — админ организации
+#   senior   — главный инженер (при can_view_all=1 видит сводки всех объектов)
+#   engineer — инженер (только свои объекты)
+# ─────────────────────────────────────────────────────────────
+ADMIN_ROLES = ('root', 'admin')          # административный доступ внутри организации
+ALL_REPORTS_ROLES = ('root', 'admin')    # + senior при can_view_all=1
+
 # Auto-migrate: создать таблицы и добавить новые колонки если их нет
 def auto_migrate():
     db = get_db()
@@ -153,8 +165,19 @@ def auto_migrate():
         _migrate_partner_projects(db)
         _migrate_contractor_partner_id(db)
         _migrate_organizations(db)
+        _migrate_root_role(db)
     finally:
         db.close()
+
+
+def _migrate_root_role(db):
+    """ШАГ 2а: перевод главного админа организации в роль 'root'.
+    Идемпотентна: условие role='admin' не даёт повторно тронуть уже
+    переведённую (или изменённую вручную) учётку."""
+    cur = db.execute("UPDATE users SET role='root' WHERE id=3 AND role='admin'")
+    if cur.rowcount:
+        db.commit()
+        print(f"👤 users.role: учётка #3 переведена в роль 'root'")
 
 
 def _migrate_organizations(db):
@@ -1057,7 +1080,7 @@ def photo_check():
     user_id = request.args.get('user_id')
     with db_conn() as db:
         u = db.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
-        if not u or u['role'] != 'admin':
+        if not u or u['role'] not in ADMIN_ROLES:
             return err('Доступ запрещён', 403)
         rows = db.execute("""
             SELECT ph.id, ph.file_path, ph.caption, dr.report_date,
@@ -1148,7 +1171,7 @@ def run_migration():
     user_id = request.args.get('user_id')
     with db_conn() as db:
         u = db.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
-        if not u or u['role'] != 'admin':
+        if not u or u['role'] not in ADMIN_ROLES:
             return err('Доступ запрещён', 403)
         try:
             db.executescript("""
@@ -1179,7 +1202,7 @@ def run_migration():
             db.execute("INSERT OR IGNORE INTO objects (name,address,client_name,tj_object_id) VALUES ('IQ Гатчина (участок 6)','Ленинградская обл., г. Гатчина','ЛСТ Генподряд','tj_gatchina_006')")
             gid = db.execute("SELECT id FROM objects WHERE tj_object_id='tj_gatchina_006'").fetchone()[0]
             uid = db.execute("SELECT id FROM users WHERE email='uhov@stroymanager.ru'").fetchone()[0]
-            aid_row = db.execute("SELECT id FROM users WHERE role='admin'").fetchone()
+            aid_row = db.execute("SELECT id FROM users WHERE role IN ('root','admin')").fetchone()
             aid = aid_row[0] if aid_row else None
             for name in ['Пятно застройки','Блок 3','ПОС']:
                 db.execute("INSERT OR IGNORE INTO sections (object_id,name) VALUES (?,?)",(gid,name))
@@ -1198,7 +1221,7 @@ def fix_duplicates():
     user_id = request.args.get('user_id')
     with db_conn() as db:
         u = db.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
-        if not u or u['role'] != 'admin':
+        if not u or u['role'] not in ADMIN_ROLES:
             return err('Доступ запрещён', 403)
         try:
             # Remove duplicate sections — keep only the one with min id per (object_id, name)
@@ -1472,7 +1495,7 @@ def all_reports():
         # Проверка прав: admin или senior с can_view_all=1
         if requester_id:
             req = db.execute("SELECT role, can_view_all FROM users WHERE id=?", (requester_id,)).fetchone()
-            if not req or (req['role'] not in ('admin',) and not (req['role']=='senior' and req['can_view_all'])):
+            if not req or (req['role'] not in ALL_REPORTS_ROLES and not (req['role']=='senior' and req['can_view_all'])):
                 return err('Доступ запрещён', 403)
         else:
             return err('Доступ запрещён', 403)
@@ -1506,7 +1529,7 @@ def export_zip():
     with db_conn() as db:
         # Проверка прав
         user = db.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
-        if not user or user['role'] != 'admin':
+        if not user or user['role'] not in ADMIN_ROLES:
             return err('Доступ запрещён', 403)
         try:
             return _export_zip_inner(db, user_id, project_id)
@@ -1701,7 +1724,7 @@ def export_day():
         return err('Параметр date обязателен')
     with db_conn() as db:
         user = db.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
-        if not user or user['role'] != 'admin':
+        if not user or user['role'] not in ADMIN_ROLES:
             return err('Доступ запрещён', 403)
         try:
             return _export_day_inner(db, date_str)
@@ -1893,7 +1916,7 @@ def all_photos():
         # Проверка прав: admin или senior с can_view_all=1
         if requester_id:
             req = db.execute("SELECT role, can_view_all FROM users WHERE id=?", (requester_id,)).fetchone()
-            if not req or (req['role'] not in ('admin',) and not (req['role']=='senior' and req['can_view_all'])):
+            if not req or (req['role'] not in ALL_REPORTS_ROLES and not (req['role']=='senior' and req['can_view_all'])):
                 return err('Доступ запрещён', 403)
         else:
             return err('Доступ запрещён', 403)
@@ -1938,7 +1961,7 @@ def migrate_v2():
     user_id = request.args.get('user_id')
     with db_conn() as db:
         u = db.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
-        if not u or u['role'] != 'admin':
+        if not u or u['role'] not in ADMIN_ROLES:
             return err('Доступ запрещён', 403)
         try:
             db.executescript("""
@@ -1996,7 +2019,7 @@ def backup_db():
     # Проверяем что запрашивает администратор
     with db_conn() as db:
         user = db.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
-        if not user or user['role'] != 'admin':
+        if not user or user['role'] not in ADMIN_ROLES:
             return err('Доступ запрещён', 403)
     # Копируем БД во временный файл чтобы не блокировать основную
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.db')

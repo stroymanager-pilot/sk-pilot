@@ -58,13 +58,18 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
 const API='https://sk.stroymanager.ru';
 let selectedUserId=null,users=[];
 
+// Роли: platform / root / admin / senior / engineer
+const ADMIN_ROLES={root:1,admin:1};
+const ROLE_LABELS={platform:'Оператор платформы',root:'Администратор',admin:'Администратор',senior:'Главный инженер',engineer:'Инженер СК'};
+const roleLabel=r=>ROLE_LABELS[r]||'Инженер СК';
+
 async function loadUsers(){
   try{
     const r=await fetch(`${API}/api/users`).then(r=>r.json());
     users=(r.data||[]).filter(u=>u.is_active!==0);
     document.getElementById('userList').innerHTML=users.map(u=>{
       const initials=u.full_name.split(' ').slice(0,2).map(n=>n[0]).join('');
-      const role=u.role==='admin'?'Администратор':u.role==='senior'?'Главный инженер':'Инженер СК';
+      const role=roleLabel(u.role);
       return `<button class="user-btn" onclick="select(${u.id},this)">
         <div class="avatar">${initials}</div>
         <div><div class="name">${u.full_name}</div><div class="role">${role}</div></div>
@@ -88,7 +93,7 @@ function login(){
   sessionStorage.setItem('userId',selectedUserId);
   sessionStorage.setItem('userRole',user.role);
   sessionStorage.setItem('userName',user.full_name);
-  window.location.href=user.role==='admin'?'/admin.html':'/report.html';
+  window.location.href=ADMIN_ROLES[user.role]?'/admin.html':'/report.html';
 }
 
 loadUsers();
