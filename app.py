@@ -3,11 +3,12 @@
 
 APP_VERSION = '1.3'
 
-from flask import Flask, request, jsonify, send_from_directory, send_file
+from flask import Flask, request, jsonify, send_from_directory, send_file, session
 from flask_cors import CORS
+from werkzeug.security import generate_password_hash, check_password_hash
 from contextlib import contextmanager
-import os, sys, hashlib, uuid
-from datetime import datetime, date
+import os, sys, hashlib, uuid, secrets
+from datetime import datetime, date, timedelta
 
 try:
     from PIL import Image
@@ -382,6 +383,235 @@ def _fix_section_id_fk(db):
 
 auto_migrate()
 CORS(app)
+
+# ─────────────────────────────────────────────────────────────
+# АУТЕНТИФИКАЦИЯ (ШАГ 2б) — переходный период
+#
+# Пароль считается заданным ТОЛЬКО если password_hash в формате werkzeug
+# (scrypt:.../pbkdf2:... — содержит '$'). Старые sha256-хеши (64 hex-символа,
+# без '$') остались от тестового пароля и паролем НЕ считаются: такой
+# пользователь входит по-старому, выбором из списка, и по паролю не пускается
+# ни при каких условиях.
+# ─────────────────────────────────────────────────────────────
+
+def _is_real_password_hash(h):
+    """True только для хешей werkzeug. Legacy sha256 (без '$') → False."""
+    return bool(h) and '$' in h
+
+def _load_secret_key():
+    """Ключ подписи сессий. Приоритет — переменная окружения SK_SECRET_KEY.
+    Иначе генерируется один раз в .secret_key рядом с app.py (в .gitignore).
+    Постоянство ключа обязательно: иначе рестарт разлогинивает всех."""
+    env = os.environ.get('SK_SECRET_KEY')
+    if env:
+        return env
+    path = os.path.join(os.path.dirname(__file__), '.secret_key')
+    try:
+        if os.path.exists(path):
+            with open(path) as f:
+                key = f.read().strip()
+            if key:
+                return key
+        key = secrets.token_hex(32)
+        with open(path, 'w') as f:
+            f.write(key)
+        os.chmod(path, 0o600)
+        print('🔑 Создан новый ключ подписи сессий: .secret_key')
+        return key
+    except Exception as e:
+        print(f'⚠️  Не удалось сохранить .secret_key ({e}) — ключ на время работы процесса')
+        return secrets.token_hex(32)
+
+app.secret_key = _load_secret_key()
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    # По умолчанию cookie только по HTTPS. Для локальной отладки по http
+    # запускать с SK_COOKIE_INSECURE=1
+    SESSION_COOKIE_SECURE=(os.environ.get('SK_COOKIE_INSECURE') != '1'),
+    PERMANENT_SESSION_LIFETIME=timedelta(days=30),
+)
+
+def current_user_id():
+    """id вошедшего пользователя из серверной сессии (или None)."""
+    return session.get('uid')
+
+@app.before_request
+def _session_identity_priority():
+    """Для вошедших ПО ПАРОЛЮ сессия важнее user_id из запроса: клиент не может
+    выдать себя за другого. Вошедшие по-старому работают как прежде —
+    обратная совместимость на переходный период."""
+    uid = session.get('uid')
+    if not uid or session.get('auth') != 'password':
+        return
+    args = request.args.to_dict(flat=False)
+    touched = False
+    for key in ('user_id', 'requester_id'):
+        if key in args:
+            args[key] = [str(uid)]
+            touched = True
+    if touched:
+        from werkzeug.datastructures import ImmutableMultiDict
+        request.args = ImmutableMultiDict(
+            [(k, v) for k, vals in args.items() for v in vals]
+        )
+
+def _start_session(user_row, how, remember):
+    session.clear()
+    session['uid'] = user_row['id']
+    session['auth'] = how          # 'password' | 'legacy'
+    session.permanent = bool(remember)
+
+def _public_user(row):
+    return {'id': row['id'], 'full_name': row['full_name'], 'email': row['email'],
+            'role': row['role'], 'can_view_all': row['can_view_all']}
+
+@app.get('/api/auth/login_users')
+def auth_login_users():
+    """Список для старого входа: только активные и БЕЗ настоящего пароля.
+    Пользователи с паролем из списка исчезают — для них форма email+пароль."""
+    with db_conn() as db:
+        rows = db.execute(
+            "SELECT id, full_name, email, role, password_hash, "
+            "COALESCE(can_view_all,0) as can_view_all "
+            "FROM users WHERE COALESCE(is_active,1)=1 ORDER BY full_name"
+        ).fetchall()
+        return ok([_public_user(r) for r in rows if not _is_real_password_hash(r['password_hash'])])
+
+@app.post('/api/auth/login')
+def auth_login():
+    """Вход по email + паролю."""
+    d = request.json or {}
+    email = (d.get('email') or '').strip().lower()
+    password = d.get('password') or ''
+    if not email or not password:
+        return err('Укажите email и пароль')
+    with db_conn() as db:
+        row = db.execute(
+            "SELECT id, full_name, email, role, password_hash, "
+            "COALESCE(is_active,1) as is_active, COALESCE(can_view_all,0) as can_view_all "
+            "FROM users WHERE lower(email)=?", (email,)
+        ).fetchone()
+        # Единое сообщение — не раскрываем, существует ли учётка
+        if not row or not row['is_active']:
+            return err('Неверный email или пароль', 401)
+        # Legacy sha256 паролем не считается: вход по паролю невозможен
+        if not _is_real_password_hash(row['password_hash']):
+            return err('Неверный email или пароль', 401)
+        if not check_password_hash(row['password_hash'], password):
+            return err('Неверный email или пароль', 401)
+        _start_session(row, 'password', d.get('remember'))
+        return ok(_public_user(row))
+
+@app.post('/api/auth/login_legacy')
+def auth_login_legacy():
+    """Старый вход — выбором из списка, без пароля. Только для активных
+    пользователей без настоящего пароля. Переходный период."""
+    d = request.json or {}
+    uid = d.get('user_id')
+    if not uid:
+        return err('user_id обязателен')
+    with db_conn() as db:
+        row = db.execute(
+            "SELECT id, full_name, email, role, password_hash, "
+            "COALESCE(is_active,1) as is_active, COALESCE(can_view_all,0) as can_view_all "
+            "FROM users WHERE id=?", (uid,)
+        ).fetchone()
+        if not row or not row['is_active']:
+            return err('Пользователь не найден или деактивирован', 403)
+        if _is_real_password_hash(row['password_hash']):
+            return err('Для этой учётной записи требуется вход по паролю', 403)
+        _start_session(row, 'legacy', d.get('remember'))
+        return ok(_public_user(row))
+
+@app.post('/api/auth/logout')
+def auth_logout():
+    session.clear()
+    return ok({'logged_out': True})
+
+@app.get('/api/auth/me')
+def auth_me():
+    """Кто вошёл. Нужен для «запомнить меня»: sessionStorage не переживает
+    закрытие браузера, а cookie — да."""
+    uid = current_user_id()
+    if not uid:
+        return ok(None)
+    with db_conn() as db:
+        row = db.execute(
+            "SELECT id, full_name, email, role, COALESCE(is_active,1) as is_active, "
+            "COALESCE(can_view_all,0) as can_view_all FROM users WHERE id=?", (uid,)
+        ).fetchone()
+        if not row or not row['is_active']:
+            session.clear()
+            return ok(None)
+        data = _public_user(row)
+        data['auth'] = session.get('auth')
+        return ok(data)
+
+@app.post('/api/auth/change_password')
+def auth_change_password():
+    """Смена собственного пароля вошедшим пользователем."""
+    uid = current_user_id()
+    if not uid:
+        return err('Требуется вход', 401)
+    d = request.json or {}
+    current = d.get('current_password') or ''
+    new = d.get('new_password') or ''
+    confirm = d.get('confirm_password') or ''
+    if len(new) < 8:
+        return err('Новый пароль — минимум 8 символов')
+    if new != confirm:
+        return err('Новый пароль и подтверждение не совпадают')
+    with db_conn() as db:
+        row = db.execute("SELECT id, password_hash FROM users WHERE id=?", (uid,)).fetchone()
+        if not row:
+            return err('Пользователь не найден', 404)
+        if not _is_real_password_hash(row['password_hash']):
+            # Первый пароль выдаёт root — иначе любой, кто выбрал имя из
+            # списка, мог бы поставить пароль и запереть настоящего владельца
+            return err('Пароль для этой учётной записи выдаёт администратор', 403)
+        if not check_password_hash(row['password_hash'], current):
+            return err('Текущий пароль неверен', 403)
+        db.execute("UPDATE users SET password_hash=? WHERE id=?",
+                   (generate_password_hash(new), uid))
+        db.commit()
+    return ok({'changed': True})
+
+_PWD_ALPHABET = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'  # без 0/O/1/l/I
+
+def _generate_password(length=14):
+    return ''.join(secrets.choice(_PWD_ALPHABET) for _ in range(length))
+
+@app.post('/api/auth/admin_set_password')
+def auth_admin_set_password():
+    """Только роль root: выдать пользователю сгенерированный пароль.
+    Пароль возвращается в ответе ОДИН раз — в БД лежит только хеш."""
+    actor_id = current_user_id() or request.args.get('user_id')
+    d = request.json or {}
+    target_id = d.get('user_id')
+    if not actor_id:
+        return err('Требуется вход', 401)
+    if not target_id:
+        return err('user_id (кому выдать пароль) обязателен')
+    with db_conn() as db:
+        actor = db.execute(
+            "SELECT role, COALESCE(is_active,1) as is_active FROM users WHERE id=?",
+            (actor_id,)
+        ).fetchone()
+        if not actor or not actor['is_active'] or actor['role'] != 'root':
+            return err('Доступ запрещён', 403)
+        target = db.execute(
+            "SELECT id, full_name, email FROM users WHERE id=?", (target_id,)
+        ).fetchone()
+        if not target:
+            return err('Пользователь не найден', 404)
+        password = _generate_password()
+        db.execute("UPDATE users SET password_hash=? WHERE id=?",
+                   (generate_password_hash(password), target['id']))
+        db.commit()
+        return ok({'user_id': target['id'], 'full_name': target['full_name'],
+                   'email': target['email'], 'password': password,
+                   'note': 'Пароль показан один раз — передайте пользователю и не сохраняйте.'})
 
 @app.get('/')
 def index():

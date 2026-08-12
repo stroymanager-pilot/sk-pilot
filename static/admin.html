@@ -142,6 +142,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
     <button class="logout-btn" onclick="downloadExportZip()" style="margin-bottom:6px;color:rgba(255,255,255,.9);background:rgba(212,168,67,.2)">📦 Экспорт (ZIP)</button>
     <button class="logout-btn" onclick="downloadExportDay()" style="margin-bottom:6px;color:rgba(255,255,255,.9);background:rgba(212,168,67,.15)">📅 Экспорт за день</button>
     <button class="logout-btn" onclick="downloadBackup()" style="margin-bottom:6px;color:rgba(255,255,255,.7)">💾 Резервная копия (.db)</button>
+    <button class="logout-btn" onclick="openPwdModal()" style="margin-bottom:6px;color:rgba(255,255,255,.7)">🔑 Сменить пароль</button>
     <button class="logout-btn" onclick="logout()">← Выйти</button>
     <div style="margin-top:12px;font-size:10px;color:rgba(255,255,255,.4);font-family:'JetBrains Mono',monospace;line-height:1.5">Разработано TeamJect<br>для Stroymanager · 2026 · v1.3</div>
   </div>
@@ -234,6 +235,23 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 </div><!-- /layout -->
 
 <!-- MODAL ПРОЕКТ -->
+<!-- MODAL: Смена своего пароля -->
+<div class="modal-bg" id="modal-pwd" onclick="if(event.target===this)closeModal('pwd')">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-h">
+      <span class="modal-title">Смена пароля</span>
+      <button class="modal-close" onclick="closeModal('pwd')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="pwdMsg" style="display:none;border-radius:8px;padding:9px 12px;font-size:13px;margin-bottom:12px"></div>
+      <input id="pwdCur" type="password" placeholder="Текущий пароль" autocomplete="current-password" style="width:100%;margin-bottom:9px">
+      <input id="pwdNew" type="password" placeholder="Новый пароль (минимум 8 символов)" autocomplete="new-password" style="width:100%;margin-bottom:9px">
+      <input id="pwdConf" type="password" placeholder="Повторите новый пароль" autocomplete="new-password" style="width:100%;margin-bottom:14px">
+      <button class="btn btn-primary" style="width:100%" onclick="submitPwdChange()">Сменить пароль</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="modal-project">
   <div class="modal">
     <div class="modal-h">
@@ -422,7 +440,46 @@ const isAdminRole = r => !!ADMIN_ROLES[r];
 const ROLE_LABELS = {platform:'Оператор платформы', root:'Администратор', admin:'Администратор', senior:'Главный инженер', engineer:'Инженер СК'};
 const roleLabelOf = r => ROLE_LABELS[r] || 'Инженер СК';
 if (!isAdminRole(userRole)) window.location.href = '/report.html';
-function logout() { sessionStorage.clear(); window.location.href = '/login.html'; }
+async function logout() {
+  // Завершаем сессию на сервере, а не только в браузере
+  try { await fetch(`${API}/api/auth/logout`, {method:'POST', credentials:'include'}); } catch(e) {}
+  sessionStorage.clear();
+  window.location.href = '/login.html';
+}
+
+// ── СМЕНА СВОЕГО ПАРОЛЯ ──
+function openPwdModal(){
+  ['pwdCur','pwdNew','pwdConf'].forEach(id=>{const e=document.getElementById(id); if(e) e.value='';});
+  _pwdMsg('');
+  openModal('pwd');
+}
+function _pwdMsg(text, kind){
+  const b=document.getElementById('pwdMsg');
+  if(!b) return;
+  if(!text){ b.style.display='none'; return; }
+  const okStyle = kind==='ok';
+  b.style.background = okStyle ? '#e4f2ec' : '#fdecef';
+  b.style.border = '1px solid ' + (okStyle ? '#3a8c5c' : '#f5c2cd');
+  b.style.color = okStyle ? '#3a8c5c' : '#CA2E55';
+  b.textContent = text;
+  b.style.display = 'block';
+}
+async function submitPwdChange(){
+  const cur=document.getElementById('pwdCur').value;
+  const nw=document.getElementById('pwdNew').value;
+  const cf=document.getElementById('pwdConf').value;
+  if(nw.length<8){ _pwdMsg('Новый пароль — минимум 8 символов'); return; }
+  if(nw!==cf){ _pwdMsg('Новый пароль и подтверждение не совпадают'); return; }
+  try{
+    const r=await fetch(`${API}/api/auth/change_password`,{
+      method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',
+      body:JSON.stringify({current_password:cur,new_password:nw,confirm_password:cf})
+    }).then(r=>r.json());
+    if(r.ok===false){ _pwdMsg(r.error||'Не удалось сменить пароль'); return; }
+    _pwdMsg('Пароль изменён','ok');
+    ['pwdCur','pwdNew','pwdConf'].forEach(id=>document.getElementById(id).value='');
+  }catch(e){ _pwdMsg('Нет связи с сервером'); }
+}
 function downloadBackup() {
   const a = document.createElement('a');
   a.href = `${API}/api/admin/backup_db?user_id=${userId}`;

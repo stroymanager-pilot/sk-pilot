@@ -198,6 +198,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
       <div class="sync-dot" id="syncDot"></div>
       <div class="status-pill" id="hStatus">черновик</div>
       <button class="history-btn" id="btnRegistry" style="display:none" onclick="openRegistry()">📊 Реестр</button>
+      <button class="history-btn" onclick="openPwdModal()" title="Сменить пароль">🔑</button>
       <button class="history-btn" onclick="openHistory()">📋</button>
       <button class="logout-btn" onclick="logout()">Выход</button>
     </div>
@@ -217,6 +218,23 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 </div>
 
 <!-- MODAL: История сводок -->
+<!-- MODAL: Смена своего пароля -->
+<div class="modal-bg" id="modal-pwd" onclick="if(event.target===this)closeModal('pwd')">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-h">
+      <span class="modal-title">Смена пароля</span>
+      <button class="modal-close" onclick="closeModal('pwd')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="pwdMsg" style="display:none;border-radius:8px;padding:9px 12px;font-size:13px;margin-bottom:12px"></div>
+      <input id="pwdCur" type="password" placeholder="Текущий пароль" autocomplete="current-password" style="width:100%;margin-bottom:9px">
+      <input id="pwdNew" type="password" placeholder="Новый пароль (минимум 8 символов)" autocomplete="new-password" style="width:100%;margin-bottom:9px">
+      <input id="pwdConf" type="password" placeholder="Повторите новый пароль" autocomplete="new-password" style="width:100%;margin-bottom:14px">
+      <button class="btn-p" style="width:100%" onclick="submitPwdChange()">Сменить пароль</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="modal-history" onclick="if(event.target===this)closeModal('history')">
   <div class="modal">
     <div class="modal-h">
@@ -275,7 +293,46 @@ if (!sessionStorage.getItem('userId')) window.location.href = '/login.html';
 const userId = parseInt(sessionStorage.getItem('userId'));
 const userName = sessionStorage.getItem('userName') || 'Инженер';
 const userRole = sessionStorage.getItem('userRole');
-function logout() { sessionStorage.clear(); window.location.href = '/login.html'; }
+async function logout() {
+  // Завершаем сессию на сервере, а не только в браузере
+  try { await fetch(`${API}/api/auth/logout`, {method:'POST', credentials:'include'}); } catch(e) {}
+  sessionStorage.clear();
+  window.location.href = '/login.html';
+}
+
+// ── СМЕНА СВОЕГО ПАРОЛЯ ──
+function openPwdModal(){
+  ['pwdCur','pwdNew','pwdConf'].forEach(id=>{const e=document.getElementById(id); if(e) e.value='';});
+  _pwdMsg('');
+  openModal('pwd');
+}
+function _pwdMsg(text, kind){
+  const b=document.getElementById('pwdMsg');
+  if(!b) return;
+  if(!text){ b.style.display='none'; return; }
+  const okStyle = kind==='ok';
+  b.style.background = okStyle ? '#e4f2ec' : '#fdecef';
+  b.style.border = '1px solid ' + (okStyle ? '#3a8c5c' : '#f5c2cd');
+  b.style.color = okStyle ? '#3a8c5c' : '#CA2E55';
+  b.textContent = text;
+  b.style.display = 'block';
+}
+async function submitPwdChange(){
+  const cur=document.getElementById('pwdCur').value;
+  const nw=document.getElementById('pwdNew').value;
+  const cf=document.getElementById('pwdConf').value;
+  if(nw.length<8){ _pwdMsg('Новый пароль — минимум 8 символов'); return; }
+  if(nw!==cf){ _pwdMsg('Новый пароль и подтверждение не совпадают'); return; }
+  try{
+    const r=await fetch(`${API}/api/auth/change_password`,{
+      method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',
+      body:JSON.stringify({current_password:cur,new_password:nw,confirm_password:cf})
+    }).then(r=>r.json());
+    if(r.ok===false){ _pwdMsg(r.error||'Не удалось сменить пароль'); return; }
+    _pwdMsg('Пароль изменён','ok');
+    ['pwdCur','pwdNew','pwdConf'].forEach(id=>document.getElementById(id).value='');
+  }catch(e){ _pwdMsg('Нет связи с сервером'); }
+}
 if (userRole === 'root' || userRole === 'admin') window.location.href = '/admin.html';
 
 const today = new Date();
