@@ -1,0 +1,15 @@
+# Боевая база данных — НЕ хранится в репозитории.
+# Живёт на сервере: /var/sk-pilot/db/pilot.db
+db/pilot.db
+db/pilot.db-shm
+db/pilot.db-wal
+db/*.db
+db/*.db-shm
+db/*.db-wal
+
+# Загруженные пользователями файлы (фотографии, протоколы)
+uploads/
+
+# Python
+__pycache__/
+*.pyc
