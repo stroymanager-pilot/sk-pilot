@@ -1586,6 +1586,21 @@ async function openDraftReport(reportId) {
       S.objectId = d.object_id;
       sessionStorage.setItem('objectId', S.objectId);
     }
+    // S.object может быть не загружен (init() вышел на экране выбора объекта)
+    // либо относиться к другому объекту, чем открываемая сводка.
+    if (!S.object || S.object.id !== S.objectId) {
+      const objDetail = await fetchWithRetry(`${API}/api/objects/${S.objectId}`).then(r=>r.json());
+      if (!objDetail.data) { toast('Объект сводки не найден','err'); return; }
+      S.object = objDetail.data;
+      S.contractors = (S.object.contractors||[]).filter(c=>c.is_active && c.work_type !== 'Заказчик');
+      S.sections = (S.object.sections||[]).filter(s=>s.is_active);
+      const hT = document.getElementById('hTitle');
+      if (hT) hT.textContent = S.object.name;
+      // Экран выбора объекта прячет навигацию — возвращаем её
+      document.getElementById('btnBack').style.display='';
+      document.getElementById('btnNext').style.display='';
+      buildNav();
+    }
     const mySecs = await fetchWithRetry(`${API}/api/objects/${S.objectId}/my_sections?user_id=${userId}`).then(r=>r.json()).catch(()=>({data:[]}));
     S.mySections = mySecs.data || [];
     S.allSections = [...(S.sections||[]), ...S.mySections];
