@@ -134,7 +134,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
   <div class="sb-section">Структура</div>
   <div class="sb-item" data-page="projects" onclick="nav(this)"><span class="ico">🏗</span> Проекты</div>
   <div class="sb-item" data-page="partners" onclick="nav(this)"><span class="ico">🤝</span> Партнёры</div>
-  <div class="sb-item" data-page="engineers" onclick="nav(this)"><span class="ico">👷</span> Инженеры</div>
+  <div class="sb-item" data-page="engineers" onclick="nav(this)"><span class="ico">👷</span> Пользователи</div>
   <div class="sb-section">Данные</div>
   <div class="sb-item" data-page="reports" onclick="nav(this)"><span class="ico">📋</span> Все сводки</div>
   <div class="sb-item" data-page="photos" onclick="nav(this)"><span class="ico">📷</span> Все фото</div>
@@ -677,9 +677,9 @@ async function loadDashboard() {
   document.getElementById('dashReports').innerHTML = recent.length ? `
     <table class="table">
       <tr><th>Дата</th><th>Инженер</th><th>Объект</th><th>Статус</th></tr>
-      ${recent.map(r=>`<tr onclick="openReport(${r.id})" style="cursor:pointer">
+      ${recent.map(r=>`<tr onclick="openReport(${r.id})" style="cursor:pointer${r.engineer_active===0?';opacity:.65':''}">
         <td style="font-family:var(--mono)">${r.report_date}</td>
-        <td>${r.engineer_name||'—'}</td>
+        <td>${r.engineer_name||'—'}${r.engineer_active===0?' <span style="font-size:10px;color:var(--text3)">(архив)</span>':''}</td>
         <td>${r.object_name||'—'}</td>
         <td><span class="badge ${r.status==='submitted'?'badge-active':'badge-type'}">${r.status==='submitted'?'Сдана':'Черновик'}</span></td>
       </tr>`).join('')}
@@ -1234,7 +1234,12 @@ function openNewEngineerModal() {
 }
 
 async function deactivateEngineer(id, name) {
-  if (!confirm(`Перевести "${name}" в архив?\nЕго сводки сохранятся.`)) return;
+  // У администратора сводок нет — упоминать их бессмысленно
+  const u = state.users.find(u=>u.id===id);
+  const note = isAdminRole(u?.role)
+    ? 'Учётная запись сохранится, вход будет закрыт.\nВосстановить можно в любой момент.'
+    : 'Его сводки сохранятся.';
+  if (!confirm(`Перевести "${name}" в архив?\n${note}`)) return;
   const r = await fetch(`${API}/api/users/${id}?user_id=${userId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({is_active:0})}).then(r=>r.json());
   if (r.ok===false) { toast(r.error||'Не удалось','err'); return; }
   toast('Переведён в архив','ok'); await init(); loadEngineers();
