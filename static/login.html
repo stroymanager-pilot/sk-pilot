@@ -55,7 +55,11 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
       <div class="err" id="errBox"></div>
 
       <input class="fld" id="email" type="email" placeholder="Email" autocomplete="username" inputmode="email">
-      <input class="fld" id="password" type="password" placeholder="Пароль" autocomplete="current-password">
+      <div style="position:relative">
+        <input class="fld" id="password" type="password" placeholder="Пароль" autocomplete="current-password" style="padding-right:46px">
+        <button type="button" id="pwdEye" onclick="togglePwd()" title="Показать пароль"
+          style="position:absolute;right:6px;top:5px;width:34px;height:34px;border:none;background:none;cursor:pointer;font-size:16px;line-height:1;color:var(--text-muted)">👁</button>
+      </div>
       <label class="rowchk"><input type="checkbox" id="remember"><span>Запомнить меня на 30 дней</span></label>
       <button class="btn" id="pwdBtn" onclick="loginPassword()">Войти</button>
 
@@ -77,6 +81,15 @@ let selectedUserId=null,users=[];
 const ADMIN_ROLES={root:1,admin:1};
 const ROLE_LABELS={platform:'Оператор платформы',root:'Администратор',admin:'Администратор',senior:'Главный инженер',engineer:'Инженер СК'};
 const roleLabel=r=>ROLE_LABELS[r]||'Инженер СК';
+
+// Показ введённого пароля — ввод с телефона часто ошибочен
+function togglePwd(){
+  const f=document.getElementById('password'), b=document.getElementById('pwdEye');
+  const show = f.type==='password';
+  f.type = show ? 'text' : 'password';
+  b.textContent = show ? '🙈' : '👁';
+  b.title = show ? 'Скрыть пароль' : 'Показать пароль';
+}
 
 function showErr(msg){
   const b=document.getElementById('errBox');

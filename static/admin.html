@@ -192,12 +192,22 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 
 <!-- ИНЖЕНЕРЫ -->
 <div class="page" id="page-engineers">
-  <div class="page-h">Инженеры</div>
-  <div class="page-d">Пользователи системы и их назначения на объекты</div>
+  <div class="page-h">Пользователи</div>
+  <div class="page-d">Инженеры, их назначения на объекты и учётные записи администраторов</div>
   <div style="margin-bottom:14px">
     <button class="btn btn-primary" onclick="openNewEngineerModal()">+ Добавить инженера</button>
   </div>
   <div id="engineersList"><div class="empty">Загрузка...</div></div>
+
+  <!-- Блок администраторов — только для роли root -->
+  <div id="adminsBlock" style="display:none;margin-top:26px">
+    <div class="page-h" style="font-size:17px">Администраторы</div>
+    <div class="page-d">Полный доступ к организации. Управляет только главный администратор.</div>
+    <div style="margin-bottom:14px">
+      <button class="btn btn-primary" onclick="openNewAdminModal()">+ Добавить администратора</button>
+    </div>
+    <div id="adminsList"><div class="empty">Загрузка...</div></div>
+  </div>
 </div>
 
 <!-- ВСЕ СВОДКИ -->
@@ -246,7 +256,11 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
       <div id="pwdMsg" style="display:none;border-radius:8px;padding:9px 12px;font-size:13px;margin-bottom:12px"></div>
       <input id="pwdCur" type="password" placeholder="Текущий пароль" autocomplete="current-password" style="width:100%;margin-bottom:9px">
       <input id="pwdNew" type="password" placeholder="Новый пароль (минимум 8 символов)" autocomplete="new-password" style="width:100%;margin-bottom:9px">
-      <input id="pwdConf" type="password" placeholder="Повторите новый пароль" autocomplete="new-password" style="width:100%;margin-bottom:14px">
+      <input id="pwdConf" type="password" placeholder="Повторите новый пароль" autocomplete="new-password" style="width:100%;margin-bottom:10px">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:14px">
+        <input type="checkbox" id="pwdShow" onchange="togglePwdFields(this.checked)" style="width:16px;height:16px;appearance:auto;-webkit-appearance:auto;cursor:pointer">
+        <span>Показать символы пароля</span>
+      </label>
       <button class="btn btn-primary" style="width:100%" onclick="submitPwdChange()">Сменить пароль</button>
     </div>
   </div>
@@ -352,8 +366,8 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
       <div class="form-row"><label class="fl">ФИО</label><input id="engName" placeholder="Глуховской Александр Константинович"></div>
       <div class="row2">
         <div class="form-row"><label class="fl">Email</label><input id="engEmail" placeholder="engineer@stroymanager.ru"></div>
-        <div class="form-row"><label class="fl">Роль</label>
-          <select id="engRole"><option value="engineer">Инженер СК</option><option value="senior">Главный инженер</option><option value="admin">Администратор</option></select>
+        <div class="form-row" id="engRoleRow"><label class="fl">Роль</label>
+          <select id="engRole"><option value="engineer">Инженер СК</option><option value="senior">Главный инженер</option></select>
         </div>
       </div>
       <div class="form-row" id="engObjectRow"><label class="fl">Назначить на объект</label>
@@ -363,6 +377,51 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('engineer')">Отмена</button>
       <button class="btn btn-primary" id="engSaveBtn" onclick="saveEngineer()">Добавить</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Добавить администратора (только root) -->
+<div class="modal-bg" id="modal-admin">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-h">
+      <span class="modal-title">Добавить администратора</span>
+      <button class="modal-close" onclick="closeModal('admin')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.5">
+        Администратор видит всю организацию: проекты, объекты, партнёров и сводки.
+        На объекты не назначается. Пароль будет создан сразу и показан один раз.
+      </div>
+      <div class="form-row"><label class="fl">ФИО</label><input id="admName" placeholder="Иванова Мария Петровна"></div>
+      <div class="form-row"><label class="fl">Email</label><input id="admEmail" placeholder="admin@stroymanager.ru"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('admin')">Отмена</button>
+      <button class="btn btn-primary" onclick="saveAdmin()">Создать</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Показ сгенерированного пароля (один раз) -->
+<div class="modal-bg" id="modal-newpwd">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-h">
+      <span class="modal-title" id="newPwdTitle">Пароль создан</span>
+      <button class="modal-close" onclick="closeModal('newpwd')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13px;margin-bottom:6px" id="newPwdWho"></div>
+      <div style="background:#fdecef;border:1px solid #f5c2cd;color:var(--gold);border-radius:8px;padding:10px 12px;font-size:12.5px;margin-bottom:14px">
+        Пароль показывается <b>один раз</b>. Передайте его пользователю лично и не сохраняйте в переписке.
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <code id="newPwdValue" style="flex:1;font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:600;letter-spacing:.06em;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;text-align:center;user-select:all"></code>
+        <button class="btn btn-ghost" onclick="copyNewPwd()" title="Скопировать">📋</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="closeModal('newpwd')">Готово, я передал пароль</button>
     </div>
   </div>
 </div>
@@ -448,8 +507,15 @@ async function logout() {
 }
 
 // ── СМЕНА СВОЕГО ПАРОЛЯ ──
+function togglePwdFields(show){
+  ['pwdCur','pwdNew','pwdConf'].forEach(id=>{
+    const e=document.getElementById(id); if(e) e.type = show ? 'text' : 'password';
+  });
+}
 function openPwdModal(){
   ['pwdCur','pwdNew','pwdConf'].forEach(id=>{const e=document.getElementById(id); if(e) e.value='';});
+  const sh=document.getElementById('pwdShow'); if(sh) sh.checked=false;
+  togglePwdFields(false);
   _pwdMsg('');
   openModal('pwd');
 }
@@ -1044,36 +1110,98 @@ async function loadEngineers() {
     }
   } catch(e) {}
 
-  el.innerHTML = `<div class="card"><div style="padding:0">${engineers.map(u=>{
-    const initials = u.full_name.split(' ').slice(0,2).map(n=>n[0]).join('');
-    const roleLabel = roleLabelOf(u.role);
-    const badgeClass = isAdminRole(u.role)?'badge-admin':'badge-eng';
-    const isActive = u.is_active !== 0;
-    const assigns = userAssign[u.id]||[];
-    const assignText = assigns.length
-      ? assigns.map(a=>`<span style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:11px;margin-right:3px">${esc(a.proj?a.proj+' → ':'') + esc(a.obj)}</span>`).join('')
-      : '<span style="color:var(--text3);font-size:11px">не назначен</span>';
-    return `<div class="list-item" style="${isActive?'':'opacity:.5;background:#f9f9f9'}">
-      <div class="list-avatar" style="${isActive?'':'background:#ddd'}">${initials}</div>
-      <div class="list-body">
-        <div class="list-name">${esc(u.full_name)}${isActive?'':' <span style="font-size:11px;color:var(--text3)">(архив)</span>'}</div>
-        <div class="list-sub">${esc(u.email)}</div>
-        <div style="margin-top:4px">${assignText}</div>
-      </div>
-      <div class="list-actions" style="align-items:center">
-        <span class="badge ${badgeClass}">${roleLabel}</span>
-        ${u.role==='senior'?`<label id="viewAllLabel-${u.id}" title="Полный просмотр всех сводок и фото" style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;margin-top:5px;padding:3px 8px;border-radius:6px;${u.can_view_all?'background:#e4f2ec;color:#3a8c5c;font-weight:700':'background:#f0f3f9;color:#8098b8'}">
-          <input type="checkbox" ${u.can_view_all?'checked':''} onchange="toggleViewAll(${u.id},this.checked)" style="cursor:pointer"><span id="viewAllTxt-${u.id}">${u.can_view_all?'Реестр: вкл':'Реестр: выкл'}</span>
-        </label>`:''}
-        ${!isAdminRole(u.role)?`
-        ${isActive?`<button class="btn btn-ghost btn-xs" onclick="editEngineer(${u.id})" title="Редактировать">✏</button>`:''}
-        ${isActive
-          ?`<button class="btn btn-danger btn-xs" onclick="deactivateEngineer(${u.id},'${esc(u.full_name)}')" title="В архив">📦</button>`
-          :`<button class="btn btn-ghost btn-xs" onclick="activateEngineer(${u.id})" title="Восстановить">↩</button>`
-        }`:''}
-      </div>
-    </div>`;
-  }).join('')}</div></div>`;
+  // Блок «Инженеры» — роли engineer / senior. Управляет любой админ.
+  const engRows = engineers.filter(u=>!isAdminRole(u.role));
+  el.innerHTML = engRows.length
+    ? `<div class="card"><div style="padding:0">${engRows.map(u=>renderUserRow(u, userAssign, false)).join('')}</div></div>`
+    : '<div class="card"><div class="empty">Нет инженеров</div></div>';
+
+  // Блок «Администраторы» — виден и управляем ТОЛЬКО роли root
+  const block = document.getElementById('adminsBlock');
+  if (userRole !== 'root') { block.style.display='none'; return; }
+  block.style.display='';
+  const admRows = engineers.filter(u=>isAdminRole(u.role));
+  document.getElementById('adminsList').innerHTML = admRows.length
+    ? `<div class="card"><div style="padding:0">${admRows.map(u=>renderUserRow(u, userAssign, true)).join('')}</div></div>`
+    : '<div class="card"><div class="empty">Администраторов нет</div></div>';
+}
+
+// Одна строка пользователя. isAdminSection — строка в блоке администраторов.
+function renderUserRow(u, userAssign, isAdminSection) {
+  const initials = u.full_name.split(' ').slice(0,2).map(n=>n[0]).join('');
+  const isActive = u.is_active !== 0;
+  const isRootAcc = u.role === 'root';
+  const meRoot = userRole === 'root';
+  // Учётку root не редактирует и не деактивирует никто, включая её саму
+  const canEdit = isAdminSection ? (meRoot && !isRootAcc) : true;
+  // Пароль root сбрасывает только он сам
+  const canReset = isRootAcc ? (meRoot && String(u.id) === String(userId)) : (isAdminSection ? meRoot : true);
+  const assigns = userAssign[u.id]||[];
+  const assignText = isAdminSection
+    ? '<span style="color:var(--text3);font-size:11px">вся организация</span>'
+    : (assigns.length
+        ? assigns.map(a=>`<span style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:11px;margin-right:3px">${esc(a.proj?a.proj+' → ':'') + esc(a.obj)}</span>`).join('')
+        : '<span style="color:var(--text3);font-size:11px">не назначен</span>');
+  return `<div class="list-item" style="${isActive?'':'opacity:.5;background:#f9f9f9'}">
+    <div class="list-avatar" style="${isActive?'':'background:#ddd'}">${initials}</div>
+    <div class="list-body">
+      <div class="list-name">${esc(u.full_name)}${isActive?'':' <span style="font-size:11px;color:var(--text3)">(архив)</span>'}</div>
+      <div class="list-sub">${esc(u.email)}</div>
+      <div style="margin-top:4px">${assignText}</div>
+    </div>
+    <div class="list-actions" style="align-items:center">
+      <span class="badge ${isAdminRole(u.role)?'badge-admin':'badge-eng'}">${roleLabelOf(u.role)}</span>
+      ${u.role==='senior'?`<label id="viewAllLabel-${u.id}" title="Полный просмотр всех сводок и фото" style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;margin-top:5px;padding:3px 8px;border-radius:6px;${u.can_view_all?'background:#e4f2ec;color:#3a8c5c;font-weight:700':'background:#f0f3f9;color:#8098b8'}">
+        <input type="checkbox" ${u.can_view_all?'checked':''} onchange="toggleViewAll(${u.id},this.checked)" style="cursor:pointer"><span id="viewAllTxt-${u.id}">${u.can_view_all?'Реестр: вкл':'Реестр: выкл'}</span>
+      </label>`:''}
+      ${canReset?`<button class="btn btn-ghost btn-xs" onclick="resetUserPassword(${u.id},'${esc(u.full_name)}')" title="Сбросить пароль">🔑</button>`:''}
+      ${canEdit&&isActive?`<button class="btn btn-ghost btn-xs" onclick="editEngineer(${u.id})" title="Редактировать">✏</button>`:''}
+      ${canEdit?(isActive
+        ?`<button class="btn btn-danger btn-xs" onclick="deactivateEngineer(${u.id},'${esc(u.full_name)}')" title="В архив">📦</button>`
+        :`<button class="btn btn-ghost btn-xs" onclick="activateEngineer(${u.id})" title="Восстановить">↩</button>`):''}
+    </div>
+  </div>`;
+}
+
+// ── Показ сгенерированного пароля (один раз) ──
+function showNewPassword(title, who, password) {
+  document.getElementById('newPwdTitle').textContent = title;
+  document.getElementById('newPwdWho').textContent = who;
+  document.getElementById('newPwdValue').textContent = password;
+  openModal('newpwd');
+}
+function copyNewPwd() {
+  const v = document.getElementById('newPwdValue').textContent;
+  navigator.clipboard?.writeText(v).then(()=>toast('Пароль скопирован','ok'))
+    .catch(()=>toast('Скопируйте вручную','err'));
+}
+
+async function resetUserPassword(id, name) {
+  if (!confirm(`Сбросить пароль для «${name}»?\nСтарый пароль перестанет работать.`)) return;
+  const r = await fetch(`${API}/api/users/${id}/reset_password?user_id=${userId}`,
+    {method:'POST', credentials:'include'}).then(r=>r.json());
+  if (r.ok===false) { toast(r.error||'Не удалось сбросить пароль','err'); return; }
+  showNewPassword('Пароль сброшен', r.data.full_name + ' · ' + r.data.email, r.data.password);
+}
+
+// ── Создание администратора (только root) ──
+function openNewAdminModal() {
+  document.getElementById('admName').value = '';
+  document.getElementById('admEmail').value = '';
+  openModal('admin');
+}
+
+async function saveAdmin() {
+  const name = document.getElementById('admName').value.trim();
+  const email = document.getElementById('admEmail').value.trim();
+  if (!name||!email) { toast('Заполните ФИО и email','err'); return; }
+  const r = await fetch(`${API}/api/users?user_id=${userId}`,{method:'POST',
+    headers:{'Content-Type':'application/json'}, credentials:'include',
+    body:JSON.stringify({full_name:name,email,role:'admin'})}).then(r=>r.json());
+  if (r.ok===false) { toast(r.error||'Не удалось создать','err'); return; }
+  closeModal('admin');
+  await init(); loadEngineers();
+  showNewPassword('Администратор создан', r.data.full_name + ' · ' + r.data.email, r.data.password);
 }
 
 function editEngineer(id) {
@@ -1082,9 +1210,13 @@ function editEngineer(id) {
   document.getElementById('editEngId').value = id;
   document.getElementById('engName').value = u.full_name||'';
   document.getElementById('engEmail').value = u.email||'';
-  document.getElementById('engRole').value = u.role||'engineer';
+  // У администратора роль не меняем: в списке ролей её нет, и смена роли
+  // администратора — отдельное действие уровня root
+  const isAdm = isAdminRole(u.role);
+  document.getElementById('engRoleRow').style.display = isAdm ? 'none' : '';
+  if (!isAdm) document.getElementById('engRole').value = u.role||'engineer';
   document.getElementById('engObjectRow').style.display = 'none'; // при редактировании не меняем объект
-  document.getElementById('modalEngTitle').textContent = 'Редактировать инженера';
+  document.getElementById('modalEngTitle').textContent = isAdm ? 'Редактировать администратора' : 'Редактировать инженера';
   document.getElementById('engSaveBtn').textContent = 'Сохранить';
   openModal('engineer');
 }
@@ -1094,6 +1226,7 @@ function openNewEngineerModal() {
   document.getElementById('engName').value = '';
   document.getElementById('engEmail').value = '';
   document.getElementById('engRole').value = 'engineer';
+  document.getElementById('engRoleRow').style.display = '';
   document.getElementById('engObjectRow').style.display = '';
   document.getElementById('modalEngTitle').textContent = 'Добавить инженера';
   document.getElementById('engSaveBtn').textContent = 'Добавить';
@@ -1102,18 +1235,20 @@ function openNewEngineerModal() {
 
 async function deactivateEngineer(id, name) {
   if (!confirm(`Перевести "${name}" в архив?\nЕго сводки сохранятся.`)) return;
-  await fetch(`${API}/api/users/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({is_active:0})});
-  toast('Инженер переведён в архив','ok'); await init(); loadEngineers();
+  const r = await fetch(`${API}/api/users/${id}?user_id=${userId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({is_active:0})}).then(r=>r.json());
+  if (r.ok===false) { toast(r.error||'Не удалось','err'); return; }
+  toast('Переведён в архив','ok'); await init(); loadEngineers();
 }
 
 async function activateEngineer(id) {
-  await fetch(`${API}/api/users/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({is_active:1})});
-  toast('Инженер восстановлен','ok'); await init(); loadEngineers();
+  const r = await fetch(`${API}/api/users/${id}?user_id=${userId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({is_active:1})}).then(r=>r.json());
+  if (r.ok===false) { toast(r.error||'Не удалось','err'); return; }
+  toast('Восстановлен','ok'); await init(); loadEngineers();
 }
 
 async function toggleViewAll(id, enabled) {
-  await fetch(`${API}/api/users/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({can_view_all: enabled ? 1 : 0})});
+  await fetch(`${API}/api/users/${id}?user_id=${userId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},
+    credentials:'include', body:JSON.stringify({can_view_all: enabled ? 1 : 0})});
   const u = state.users.find(u=>u.id===id);
   if (u) u.can_view_all = enabled ? 1 : 0;
   // Обновить вид лейбла без перезагрузки страницы
@@ -1136,20 +1271,24 @@ async function saveEngineer() {
   if (!name||!email) { toast('Заполните ФИО и email','err'); return; }
   if (id) {
     // Редактирование существующего
-    await fetch(`${API}/api/users/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({full_name:name,email,role})});
+    const body = {full_name:name, email};
+    if (document.getElementById('engRoleRow').style.display !== 'none') body.role = role;
+    const r = await fetch(`${API}/api/users/${id}?user_id=${userId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},
+      credentials:'include', body:JSON.stringify(body)}).then(r=>r.json());
+    if (r.ok===false) { toast(r.error||'Не удалось сохранить','err'); return; }
     closeModal('engineer'); toast('Сохранено','ok'); await init(); loadEngineers();
   } else {
     // Новый инженер
     const objId = document.getElementById('engObject').value;
-    const r = await fetch(`${API}/api/users`,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({full_name:name,email,role,password:'password123'})}).then(r=>r.json());
-    if (!r.ok) { toast('Ошибка: '+r.error,'err'); return; }
+    const r = await fetch(`${API}/api/users?user_id=${userId}`,{method:'POST',headers:{'Content-Type':'application/json'},
+      credentials:'include', body:JSON.stringify({full_name:name,email,role})}).then(r=>r.json());
+    if (r.ok===false) { toast(r.error||'Не удалось создать','err'); return; }
     if (objId) {
       await fetch(`${API}/api/objects/${objId}/assign_user`,{method:'POST',
-        headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:r.data.id})});
+        headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({user_id:r.data.id})});
     }
-    closeModal('engineer'); toast('Инженер добавлен','ok'); await init(); loadEngineers();
+    closeModal('engineer'); await init(); loadEngineers();
+    showNewPassword('Инженер создан', r.data.full_name + ' · ' + r.data.email, r.data.password);
   }
 }
 

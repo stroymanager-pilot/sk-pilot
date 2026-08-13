@@ -167,8 +167,22 @@ def auto_migrate():
         _migrate_contractor_partner_id(db)
         _migrate_organizations(db)
         _migrate_root_role(db)
+        _migrate_drop_admin_object_links(db)
     finally:
         db.close()
+
+
+def _migrate_drop_admin_object_links(db):
+    """ШАГ 4: администраторы видят всю организацию, привязка к объекту для них
+    бессмысленна. Удаляет рудиментные строки object_users для ролей root/admin.
+    Идемпотентна: повторный запуск не находит таких строк и ничего не делает."""
+    cur = db.execute("""
+        DELETE FROM object_users
+        WHERE user_id IN (SELECT id FROM users WHERE role IN ('root','admin'))
+    """)
+    if cur.rowcount:
+        db.commit()
+        print(f"🧹 object_users: удалено {cur.rowcount} привязок админов к объектам")
 
 
 def _migrate_root_role(db):
@@ -582,6 +596,36 @@ _PWD_ALPHABET = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'  # б
 def _generate_password(length=14):
     return ''.join(secrets.choice(_PWD_ALPHABET) for _ in range(length))
 
+# ── Права на управление учётными записями (ШАГ 4) ──
+#   root  — всё, включая учётки администраторов
+#   admin — всё, КРОМЕ учёток администраторов
+#   учётку root не может изменить или деактивировать никто, включая её саму
+ENGINEER_ROLES = ('engineer', 'senior')
+
+def _actor_row(db):
+    """Кто выполняет действие: приоритет у сессии, иначе user_id из запроса
+    (обратная совместимость на переходный период)."""
+    aid = current_user_id() or request.args.get('user_id')
+    if not aid:
+        return None
+    return db.execute(
+        "SELECT id, role, COALESCE(is_active,1) as is_active FROM users WHERE id=?",
+        (aid,)
+    ).fetchone()
+
+def _can_manage(actor, target_role):
+    """Может ли actor управлять учёткой с ролью target_role.
+    Возвращает (True, None) или (False, 'причина')."""
+    if not actor or not actor['is_active']:
+        return False, 'Требуется вход'
+    if actor['role'] not in ADMIN_ROLES:
+        return False, 'Доступ запрещён'
+    if target_role == 'root':
+        return False, 'Учётную запись главного администратора изменить нельзя'
+    if target_role == 'admin' and actor['role'] != 'root':
+        return False, 'Управлять администраторами может только главный администратор'
+    return True, None
+
 @app.post('/api/auth/admin_set_password')
 def auth_admin_set_password():
     """Только роль root: выдать пользователю сгенерированный пароль.
@@ -862,32 +906,92 @@ def get_user(user_id):
 def update_user(user_id):
     d = request.json or {}
     with db_conn() as db:
+        target = db.execute("SELECT id, role FROM users WHERE id=?", (user_id,)).fetchone()
+        if not target:
+            return err('Пользователь не найден', 404)
+        actor = _actor_row(db)
+        # Право на текущую роль учётки
+        can, why = _can_manage(actor, target['role'])
+        if not can:
+            return err(why, 403)
         allowed = ['full_name', 'email', 'role', 'is_active', 'can_view_all']
         updates = {k: v for k, v in d.items() if k in allowed}
+        new_role = updates.get('role')
+        if new_role is not None and new_role != target['role']:
+            if new_role not in ENGINEER_ROLES + ('admin',):
+                return err('Недопустимая роль')
+            # Назначить или снять роль администратора может только root
+            can2, why2 = _can_manage(actor, new_role)
+            if not can2:
+                return err(why2, 403)
         if updates:
             sql = ', '.join(f"{k}=?" for k in updates)
             db.execute(f"UPDATE users SET {sql} WHERE id=?", list(updates.values()) + [user_id])
+            # Администратору объекты не нужны — снимаем привязки, если роль сменилась
+            if new_role in ADMIN_ROLES:
+                db.execute("DELETE FROM object_users WHERE user_id=?", (user_id,))
             db.commit()
         return ok()
 
 @app.post('/api/users')
 def create_user():
+    """Создание учётной записи. Пароль генерируется ВСЕГДА и показывается
+    один раз — учётка без настоящего пароля не создаётся ни при каких
+    условиях (иначе она попадёт в открытый список входа)."""
     d = request.json or {}
     if not d.get('email') or not d.get('full_name'):
         return err('email и full_name обязательны')
-    pwd = d.get('password', 'changeme')
-    pwd_hash = hashlib.sha256(pwd.encode()).hexdigest()
+    role = d.get('role', 'engineer')
+    if role not in ENGINEER_ROLES + ('admin',):
+        return err('Недопустимая роль')
     with db_conn() as db:
+        actor = _actor_row(db)
+        allowed, why = _can_manage(actor, role)
+        if not allowed:
+            return err(why, 403)
+        password = _generate_password()
         try:
             cur = db.execute(
                 "INSERT INTO users (full_name, email, role, password_hash, tj_user_id) VALUES (?,?,?,?,?)",
-                (d['full_name'], d['email'], d.get('role', 'engineer'), pwd_hash, d.get('tj_user_id'))
+                (d['full_name'], d['email'], role, generate_password_hash(password), d.get('tj_user_id'))
             )
             db.commit()
-            row = db.execute("SELECT id, full_name, email, role FROM users WHERE id=?", (cur.lastrowid,)).fetchone()
-            return ok(dict(row)), 201
-        except Exception as e:
-            return err(f'Email уже существует: {e}')
+        except Exception:
+            return err('Пользователь с таким email уже существует')
+        row = db.execute("SELECT id, full_name, email, role FROM users WHERE id=?",
+                         (cur.lastrowid,)).fetchone()
+        data = dict(row)
+        data['password'] = password
+        data['note'] = 'Пароль показан один раз — передайте пользователю и не сохраняйте.'
+        return ok(data), 201
+
+@app.post('/api/users/<int:user_id>/reset_password')
+def reset_user_password(user_id):
+    """Сброс пароля учётной записи. Инженеров сбрасывает любой админ,
+    администраторов — только root. Свою учётку root сбрасывает сам."""
+    with db_conn() as db:
+        actor = _actor_row(db)
+        if not actor or not actor['is_active']:
+            return err('Требуется вход', 401)
+        target = db.execute("SELECT id, full_name, email, role FROM users WHERE id=?",
+                            (user_id,)).fetchone()
+        if not target:
+            return err('Пользователь не найден', 404)
+        if target['role'] == 'root':
+            # Единственное исключение: root сбрасывает пароль сам себе
+            if not (actor['role'] == 'root' and int(actor['id']) == int(target['id'])):
+                return err('Сбросить пароль главного администратора может только он сам', 403)
+        else:
+            allowed, why = _can_manage(actor, target['role'])
+            if not allowed:
+                return err(why, 403)
+        password = _generate_password()
+        db.execute("UPDATE users SET password_hash=? WHERE id=?",
+                   (generate_password_hash(password), target['id']))
+        db.commit()
+        return ok({'id': target['id'], 'full_name': target['full_name'],
+                   'email': target['email'], 'password': password,
+                   'note': 'Пароль показан один раз — передайте пользователю и не сохраняйте.'})
 
 @app.post('/api/objects/<int:obj_id>/assign_user')
 def assign_user(obj_id):
@@ -895,6 +999,11 @@ def assign_user(obj_id):
     if not d.get('user_id'):
         return err('user_id обязателен')
     with db_conn() as db:
+        # Администраторы видят всю организацию — привязка к объекту не имеет
+        # смысла и оставляет рудиментные записи в object_users
+        u = db.execute("SELECT role FROM users WHERE id=?", (d['user_id'],)).fetchone()
+        if u and u['role'] in ADMIN_ROLES:
+            return err('Администратора не назначают на объект — он видит всю организацию')
         try:
             db.execute(
                 "INSERT OR REPLACE INTO object_users (object_id, user_id, date_from) VALUES (?,?,?)",

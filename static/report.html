@@ -229,7 +229,11 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
       <div id="pwdMsg" style="display:none;border-radius:8px;padding:9px 12px;font-size:13px;margin-bottom:12px"></div>
       <input id="pwdCur" type="password" placeholder="Текущий пароль" autocomplete="current-password" style="width:100%;margin-bottom:9px">
       <input id="pwdNew" type="password" placeholder="Новый пароль (минимум 8 символов)" autocomplete="new-password" style="width:100%;margin-bottom:9px">
-      <input id="pwdConf" type="password" placeholder="Повторите новый пароль" autocomplete="new-password" style="width:100%;margin-bottom:14px">
+      <input id="pwdConf" type="password" placeholder="Повторите новый пароль" autocomplete="new-password" style="width:100%;margin-bottom:10px">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:14px">
+        <input type="checkbox" id="pwdShow" onchange="togglePwdFields(this.checked)" style="width:16px;height:16px;appearance:auto;-webkit-appearance:auto;cursor:pointer">
+        <span>Показать символы пароля</span>
+      </label>
       <button class="btn-p" style="width:100%" onclick="submitPwdChange()">Сменить пароль</button>
     </div>
   </div>
@@ -301,8 +305,15 @@ async function logout() {
 }
 
 // ── СМЕНА СВОЕГО ПАРОЛЯ ──
+function togglePwdFields(show){
+  ['pwdCur','pwdNew','pwdConf'].forEach(id=>{
+    const e=document.getElementById(id); if(e) e.type = show ? 'text' : 'password';
+  });
+}
 function openPwdModal(){
   ['pwdCur','pwdNew','pwdConf'].forEach(id=>{const e=document.getElementById(id); if(e) e.value='';});
+  const sh=document.getElementById('pwdShow'); if(sh) sh.checked=false;
+  togglePwdFields(false);
   _pwdMsg('');
   openModal('pwd');
 }
