@@ -403,10 +403,10 @@ async function openRegistry() {
       ${reports.map(r=>{
         const p=r.report_date.split('-'); const dateF=p[2]+'.'+p[1]+'.'+p[0];
         const isSubmitted=r.status==='submitted';
-        return `<div onclick="closeModal('registry');openPastReport(${r.id},'${r.report_date}')" style="padding:10px 0;border-bottom:1px solid var(--surface2);cursor:pointer" onmouseover="this.style.background='var(--surface)'" onmouseout="this.style.background=''">
+        return `<div onclick="closeModal('registry');openPastReport(${r.id},'${r.report_date}')" style="padding:10px 0;border-bottom:1px solid var(--surface2);cursor:pointer${r.engineer_active===0?';opacity:.65':''}" onmouseover="this.style.background='var(--surface)'" onmouseout="this.style.background=''">
           <div style="display:flex;justify-content:space-between;align-items:flex-start">
             <div>
-              <div style="font-size:14px;font-weight:600;color:var(--navy)">${esc(r.engineer_name)}</div>
+              <div style="font-size:14px;font-weight:600;color:var(--navy)">${esc(r.engineer_name)}${r.engineer_active===0?' <span style="font-size:10px;color:var(--text3)">(архив)</span>':''}</div>
               <div style="font-size:12px;color:var(--text3)">${esc(r.object_name)||'—'} · ${dateF}</div>
             </div>
             <span style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;${isSubmitted?'background:var(--green-pale);color:var(--green)':'background:var(--amber-pale);color:var(--amber)'}">${isSubmitted?'Сдана':'Черновик'}</span>

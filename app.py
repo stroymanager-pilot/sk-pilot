@@ -1001,9 +1001,16 @@ def assign_user(obj_id):
     with db_conn() as db:
         # Администраторы видят всю организацию — привязка к объекту не имеет
         # смысла и оставляет рудиментные записи в object_users
-        u = db.execute("SELECT role FROM users WHERE id=?", (d['user_id'],)).fetchone()
+        u = db.execute(
+            "SELECT role, COALESCE(is_active,1) as is_active FROM users WHERE id=?",
+            (d['user_id'],)
+        ).fetchone()
         if u and u['role'] in ADMIN_ROLES:
             return err('Администратора не назначают на объект — он видит всю организацию')
+        # Архивного пользователя на объект не назначаем. Уже существующие
+        # назначения при этом сохраняются — они часть истории.
+        if u and not u['is_active']:
+            return err('Нельзя назначить архивного пользователя — сначала восстановите его')
         try:
             db.execute(
                 "INSERT OR REPLACE INTO object_users (object_id, user_id, date_from) VALUES (?,?,?)",

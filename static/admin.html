@@ -913,7 +913,9 @@ async function manageEngineers(objId, objName) {
 async function refreshEngineers() {
   const res = await fetch(`${API}/api/objects/${_curEngObjId}`).then(r=>r.json());
   const assigned = res.data?.engineers || [];
-  const allUsers = state.users.filter(u => !isAdminRole(u.role));
+  // Архивных на объект не назначаем. Уже назначенные ниже отображаются
+  // как есть — они приходят из ответа API, а не из этого списка.
+  const allUsers = state.users.filter(u => !isAdminRole(u.role) && u.is_active !== 0);
 
   // Список назначенных
   const el = document.getElementById('modalEngineersList');
@@ -944,10 +946,11 @@ async function refreshEngineers() {
 async function addEngineerToObj() {
   const userId = document.getElementById('newEngineerSel').value;
   if (!userId) { toast('Выберите инженера','err'); return; }
-  await fetch(`${API}/api/objects/${_curEngObjId}/assign_user`, {
-    method:'POST', headers:{'Content-Type':'application/json'},
+  const r = await fetch(`${API}/api/objects/${_curEngObjId}/assign_user`, {
+    method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
     body: JSON.stringify({user_id: parseInt(userId)})
-  });
+  }).then(r=>r.json());
+  if (r.ok === false) { toast(r.error||'Не удалось назначить','err'); return; }
   await refreshEngineers();
   await init();
   toast('Инженер назначен','ok');
