@@ -1,7 +1,7 @@
 # SK-pilot (СК-пилот) — система ежедневных сводок строительного контроля.
-# Автор: Vladislav Nikonenko (идея и разработка). © 2026. Версия 1.3.
+# Автор: Vladislav Nikonenko (идея и разработка). © 2026. Версия 1.5.
 
-APP_VERSION = '1.3'
+APP_VERSION = '1.5'
 
 from flask import Flask, request, jsonify, send_from_directory, send_file, session
 from flask_cors import CORS
@@ -716,7 +716,15 @@ def list_objects():
                     (user_id,)
                 ).fetchall()
                 return ok(rows_to_list(rows))
-        rows = db.execute("SELECT * FROM objects WHERE is_active=1 ORDER BY name").fetchall()
+        # Объект активен, только если активен и он сам, и его проект.
+        # Объекты без проекта (project_id IS NULL) считаются активными —
+        # деактивированного проекта у них нет.
+        rows = db.execute("""
+            SELECT o.* FROM objects o
+            LEFT JOIN projects p ON p.id = o.project_id
+            WHERE o.is_active=1 AND (o.project_id IS NULL OR p.is_active=1)
+            ORDER BY o.name
+        """).fetchall()
         return ok(rows_to_list(rows))
 
 @app.post('/api/objects')
