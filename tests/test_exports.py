@@ -6,7 +6,9 @@
 import io
 import zipfile
 
-from conftest import OBJ_IN_ACTIVE_PROJECT, UID, as_role
+import pytest
+
+from conftest import IS_POSTGRES, OBJ_IN_ACTIVE_PROJECT, UID, as_role
 
 DATE = '2026-03-17'
 ПУСТАЯ_ДАТА = '2019-01-01'
@@ -92,6 +94,7 @@ def test_полный_экспорт_на_пустой_базе(client):
 
 # ── Резервная копия ──────────────────────────────────────────────────────
 
+@pytest.mark.skipif(IS_POSTGRES, reason='у PostgreSQL нет файла базы — копия снимается pg_dump')
 def test_резервная_копия_базы(client):
     as_role(client, 'root')
     r = client.get(f'/api/admin/backup_db?user_id={UID["root"]}')
@@ -99,6 +102,7 @@ def test_резервная_копия_базы(client):
     assert r.data[:16].startswith(b'SQLite format 3'), 'ожидался файл базы SQLite'
 
 
+@pytest.mark.skipif(IS_POSTGRES, reason='у PostgreSQL нет файла базы — копия снимается pg_dump')
 def test_резервная_копия_открывается_как_база(client, tmp_path):
     import sqlite3
     as_role(client, 'root')
@@ -109,3 +113,12 @@ def test_резервная_копия_открывается_как_база(cl
     users = conn.execute('SELECT COUNT(*) FROM users').fetchone()[0]
     conn.close()
     assert users == 7
+
+
+@pytest.mark.skipif(not IS_POSTGRES, reason='проверка поведения на PostgreSQL')
+def test_резервная_копия_на_postgres_отвечает_отказом(client):
+    """Мнимого успеха быть не должно: админ обязан понять, что копии нет."""
+    as_role(client, 'root')
+    r = client.get(f'/api/admin/backup_db?user_id={UID["root"]}')
+    assert r.status_code == 503
+    assert 'pg_dump' in r.get_json()['error']

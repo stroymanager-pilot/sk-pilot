@@ -37,6 +37,32 @@ python3 app.py
 
 ---
 
+## Выбор базы данных
+
+Приложение работает и на SQLite, и на PostgreSQL. Выбор — переменной
+окружения, без правки кода:
+
+```bash
+python3 app.py                      # SQLite (по умолчанию)
+SK_DB_TYPE=postgres python3 app.py  # PostgreSQL
+```
+
+Переменные подключения к PostgreSQL: `SK_PG_HOST`, `SK_PG_PORT`, `SK_PG_DB`,
+`SK_PG_USER`, `SK_PG_PASSWORD` — либо одна строка `SK_PG_DSN`.
+
+Схема PostgreSQL создаётся один раз из `db/schema_postgres.sql` — это
+единственный источник правды по структуре базы. `auto_migrate()` под
+PostgreSQL не выполняется: он относился к истории конкретного файла
+`pilot.db`.
+
+Перенос данных из SQLite в PostgreSQL с сохранением всех идентификаторов:
+
+```bash
+python3 scripts/migrate_to_postgres.py --sqlite /var/sk-pilot/db/pilot.db --pg "host=localhost dbname=sk_pilot user=sk password=..."
+```
+
+---
+
 ## Автотесты
 
 Набор проверок «система жива и ведёт себя как раньше»: аутентификация, права
@@ -62,6 +88,16 @@ pytest -v                          # с именами тестов
 pytest tests/test_auth.py          # один файл
 pytest -k "пароль"                 # по подстроке в имени
 ```
+
+Тот же набор прогоняется на PostgreSQL — так проверяется, что после
+переезда поведение не изменилось:
+
+```bash
+SK_DB_TYPE=postgres SK_PG_DB=sk_test pytest
+```
+
+Имя базы обязано содержать `test`, иначе прогон прерывается: это защита
+от запуска тестов на боевой базе.
 
 **Тесты не имеют доступа к боевой базе.** Перед импортом приложения
 `tests/conftest.py` выставляет `SK_DB_PATH` и `SK_UPLOAD_DIR` на временную

@@ -19,7 +19,7 @@ except ImportError:
     _PIL_AVAILABLE = False
 
 sys.path.insert(0, os.path.dirname(__file__))
-from db.schema import get_db, init_db
+from db.schema import get_db, init_db, IS_POSTGRES
 
 # ── ОБРАБОТКА ИЗОБРАЖЕНИЙ ────────────────────────────────────
 _MAX_PX = 2000   # максимальная длинная сторона после ресайза
@@ -75,6 +75,13 @@ ALL_REPORTS_ROLES = ('root', 'admin')    # + senior при can_view_all=1
 
 # Auto-migrate: создать таблицы и добавить новые колонки если их нет
 def auto_migrate():
+    # В PostgreSQL схема создаётся один раз из db/schema_postgres.sql.
+    # Накопленная история ALTER TABLE относилась к конкретному файлу
+    # pilot.db; разовые миграции данных (partner_projects, partner_id,
+    # organizations, root-роль, привязки админов) уже отработали, их
+    # результат содержится в перенесённых данных.
+    if IS_POSTGRES:
+        return
     db = get_db()
     try:
         # Создаём таблицы, которые могут отсутствовать в старых БД
@@ -272,14 +279,14 @@ def _fix_personnel_contractor_fk(db):
 
 def _migrate_partner_projects(db):
     """Переносит привязки partners.project_id → partner_projects (ШАГ 1 many-to-many).
-    Идемпотентна: INSERT OR IGNORE по UNIQUE(partner_id, project_id)."""
+    Идемпотентна: ON CONFLICT DO NOTHING по UNIQUE(partner_id, project_id)."""
     rows = db.execute("SELECT id, name, project_id FROM partners").fetchall()
     with_proj = [r for r in rows if r['project_id'] is not None]
     without_proj = [r for r in rows if r['project_id'] is None]
     migrated = 0
     for r in with_proj:
         cur = db.execute(
-            "INSERT OR IGNORE INTO partner_projects (partner_id, project_id) VALUES (?,?)",
+            "INSERT INTO partner_projects (partner_id, project_id) VALUES (?,?) ON CONFLICT DO NOTHING",
             (r['id'], r['project_id'])
         )
         migrated += cur.rowcount
@@ -736,11 +743,12 @@ def create_object():
         return err('name обязателен')
     with db_conn() as db:
         cur = db.execute(
-            "INSERT INTO objects (name, address, client_name, contract_number, tj_object_id, project_id) VALUES (?,?,?,?,?,?)",
+            "INSERT INTO objects (name, address, client_name, contract_number, tj_object_id, project_id) VALUES (?,?,?,?,?,?) RETURNING id",
             (d['name'], d.get('address'), d.get('client_name'), d.get('contract_number'), d.get('tj_object_id'), d.get('project_id'))
         )
+        _nid = cur.fetchone()['id']
         db.commit()
-        row = db.execute("SELECT * FROM objects WHERE id=?", (cur.lastrowid,)).fetchone()
+        row = db.execute("SELECT * FROM objects WHERE id=?", (_nid,)).fetchone()
         return ok(dict(row)), 201
 
 @app.get('/api/objects/<int:obj_id>')
@@ -839,9 +847,10 @@ def add_section(obj_id):
     if not d.get('name'):
         return err('name обязателен')
     with db_conn() as db:
-        cur = db.execute("INSERT INTO sections (object_id, name) VALUES (?,?)", (obj_id, d['name']))
+        cur = db.execute("INSERT INTO sections (object_id, name) VALUES (?,?) RETURNING id", (obj_id, d['name']))
+        _nid = cur.fetchone()['id']
         db.commit()
-        row = db.execute("SELECT * FROM sections WHERE id=?", (cur.lastrowid,)).fetchone()
+        row = db.execute("SELECT * FROM sections WHERE id=?", (_nid,)).fetchone()
         return ok(dict(row)), 201
 
 @app.patch('/api/sections/<int:sec_id>')
@@ -875,11 +884,12 @@ def add_contractor(obj_id):
         return err('name обязателен')
     with db_conn() as db:
         cur = db.execute(
-            "INSERT INTO contractors (object_id, name, work_type) VALUES (?,?,?)",
+            "INSERT INTO contractors (object_id, name, work_type) VALUES (?,?,?) RETURNING id",
             (obj_id, d['name'], d.get('work_type'))
         )
+        _nid = cur.fetchone()['id']
         db.commit()
-        row = db.execute("SELECT * FROM contractors WHERE id=?", (cur.lastrowid,)).fetchone()
+        row = db.execute("SELECT * FROM contractors WHERE id=?", (_nid,)).fetchone()
         return ok(dict(row)), 201
 
 @app.patch('/api/contractors/<int:c_id>')
@@ -962,14 +972,15 @@ def create_user():
         password = _generate_password()
         try:
             cur = db.execute(
-                "INSERT INTO users (full_name, email, role, password_hash, tj_user_id) VALUES (?,?,?,?,?)",
+                "INSERT INTO users (full_name, email, role, password_hash, tj_user_id) VALUES (?,?,?,?,?) RETURNING id",
                 (d['full_name'], d['email'], role, generate_password_hash(password), d.get('tj_user_id'))
             )
+            _nid = cur.fetchone()['id']
             db.commit()
         except Exception:
             return err('Пользователь с таким email уже существует')
         row = db.execute("SELECT id, full_name, email, role FROM users WHERE id=?",
-                         (cur.lastrowid,)).fetchone()
+                         (_nid,)).fetchone()
         data = dict(row)
         data['password'] = password
         data['note'] = 'Пароль показан один раз — передайте пользователю и не сохраняйте.'
@@ -1023,7 +1034,8 @@ def assign_user(obj_id):
             return err('Нельзя назначить архивного пользователя — сначала восстановите его')
         try:
             db.execute(
-                "INSERT OR REPLACE INTO object_users (object_id, user_id, date_from) VALUES (?,?,?)",
+                "INSERT INTO object_users (object_id, user_id, date_from) VALUES (?,?,?) "
+                "ON CONFLICT (object_id, user_id) DO UPDATE SET date_from=EXCLUDED.date_from",
                 (obj_id, d['user_id'], d.get('date_from', date.today().isoformat()))
             )
             db.commit()
@@ -1080,11 +1092,12 @@ def create_report():
                 return err('Объект не назначен инженеру', 403)
         try:
             cur = db.execute(
-                "INSERT INTO daily_reports (object_id, user_id, report_date) VALUES (?,?,?)",
+                "INSERT INTO daily_reports (object_id, user_id, report_date) VALUES (?,?,?) RETURNING id",
                 (d['object_id'], d['user_id'], d['report_date'])
             )
+            _nid = cur.fetchone()['id']
             db.commit()
-            row = db.execute("SELECT * FROM daily_reports WHERE id=?", (cur.lastrowid,)).fetchone()
+            row = db.execute("SELECT * FROM daily_reports WHERE id=?", (_nid,)).fetchone()
             return ok(dict(row)), 201
         except Exception as e:
             return err(f'Сводка за эту дату уже существует: {e}')
@@ -1177,11 +1190,12 @@ def add_input_control(report_id):
     d = request.json or {}
     with db_conn() as db:
         cur = db.execute(
-            "INSERT INTO input_control (report_id, material_name, quantity, document_name, section_id, status, deviation_note, engineer_id, contractor_id) VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO input_control (report_id, material_name, quantity, document_name, section_id, status, deviation_note, engineer_id, contractor_id) VALUES (?,?,?,?,?,?,?,?,?) RETURNING id",
             (report_id, d.get('material_name'), d.get('quantity'), d.get('document_name'), d.get('section_id'), d.get('status',''), d.get('deviation_note',''), d.get('engineer_id'), d.get('contractor_id'))
         )
+        _nid = cur.fetchone()['id']
         db.commit()
-        row = db.execute("SELECT ic.*, s.name as section_name, c.name as contractor_name FROM input_control ic LEFT JOIN sections s ON s.id=ic.section_id LEFT JOIN contractors c ON c.id=ic.contractor_id WHERE ic.id=?", (cur.lastrowid,)).fetchone()
+        row = db.execute("SELECT ic.*, s.name as section_name, c.name as contractor_name FROM input_control ic LEFT JOIN sections s ON s.id=ic.section_id LEFT JOIN contractors c ON c.id=ic.contractor_id WHERE ic.id=?", (_nid,)).fetchone()
         return ok(dict(row)), 201
 
 @app.delete('/api/input_control/<int:ic_id>')
@@ -1202,11 +1216,12 @@ def add_remark(report_id):
         return err('description обязателен')
     with db_conn() as db:
         cur = db.execute(
-            "INSERT INTO verbal_remarks (report_id, section_id, description, deadline, issued_by) VALUES (?,?,?,?,?)",
+            "INSERT INTO verbal_remarks (report_id, section_id, description, deadline, issued_by) VALUES (?,?,?,?,?) RETURNING id",
             (report_id, d.get('section_id'), d['description'], d.get('deadline'), d.get('issued_by'))
         )
+        _nid = cur.fetchone()['id']
         db.commit()
-        row = db.execute("SELECT * FROM verbal_remarks WHERE id=?", (cur.lastrowid,)).fetchone()
+        row = db.execute("SELECT * FROM verbal_remarks WHERE id=?", (_nid,)).fetchone()
         return ok(dict(row)), 201
 
 @app.patch('/api/remarks/<int:remark_id>/close')
@@ -1236,11 +1251,12 @@ def add_prescription(report_id):
     d = request.json or {}
     with db_conn() as db:
         cur = db.execute(
-            "INSERT INTO prescriptions_log (report_id, tj_prescription_id, number, issue_date, section_id, deadline, status) VALUES (?,?,?,?,?,?,?)",
+            "INSERT INTO prescriptions_log (report_id, tj_prescription_id, number, issue_date, section_id, deadline, status) VALUES (?,?,?,?,?,?,?) RETURNING id",
             (report_id, d.get('tj_prescription_id'), d.get('number'), d.get('issue_date'), d.get('section_id'), d.get('deadline'), d.get('status'))
         )
+        _nid = cur.fetchone()['id']
         db.commit()
-        row = db.execute("SELECT * FROM prescriptions_log WHERE id=?", (cur.lastrowid,)).fetchone()
+        row = db.execute("SELECT * FROM prescriptions_log WHERE id=?", (_nid,)).fetchone()
         return ok(dict(row)), 201
 
 # ─────────────────────────────────────────────────────────
@@ -1252,11 +1268,12 @@ def add_operational_control(report_id):
     d = request.json or {}
     with db_conn() as db:
         cur = db.execute(
-            "INSERT INTO operational_control (report_id, section_id, work_stage, controlled_operations, control_method, status, deviation_note, engineer_id, contractor_id) VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO operational_control (report_id, section_id, work_stage, controlled_operations, control_method, status, deviation_note, engineer_id, contractor_id) VALUES (?,?,?,?,?,?,?,?,?) RETURNING id",
             (report_id, d.get('section_id'), d.get('work_stage'), d.get('controlled_operations'), d.get('control_method'), d.get('status',''), d.get('deviation_note',''), d.get('engineer_id'), d.get('contractor_id'))
         )
+        _nid = cur.fetchone()['id']
         db.commit()
-        row = db.execute("SELECT oc.*, s.name as section_name, c.name as contractor_name FROM operational_control oc LEFT JOIN sections s ON s.id=oc.section_id LEFT JOIN contractors c ON c.id=oc.contractor_id WHERE oc.id=?", (cur.lastrowid,)).fetchone()
+        row = db.execute("SELECT oc.*, s.name as section_name, c.name as contractor_name FROM operational_control oc LEFT JOIN sections s ON s.id=oc.section_id LEFT JOIN contractors c ON c.id=oc.contractor_id WHERE oc.id=?", (_nid,)).fetchone()
         return ok(dict(row)), 201
 
 @app.delete('/api/operational_control/<int:oc_id>')
@@ -1275,11 +1292,12 @@ def add_meeting(report_id):
     d = request.json or {}
     with db_conn() as db:
         cur = db.execute(
-            "INSERT INTO meetings (report_id, location, time, participants, agenda, engineer_id) VALUES (?,?,?,?,?,?)",
+            "INSERT INTO meetings (report_id, location, time, participants, agenda, engineer_id) VALUES (?,?,?,?,?,?) RETURNING id",
             (report_id, d.get('location'), d.get('time'), d.get('participants'), d.get('agenda'), d.get('engineer_id'))
         )
+        _nid = cur.fetchone()['id']
         db.commit()
-        row = db.execute("SELECT * FROM meetings WHERE id=?", (cur.lastrowid,)).fetchone()
+        row = db.execute("SELECT * FROM meetings WHERE id=?", (_nid,)).fetchone()
         return ok(dict(row)), 201
 
 @app.patch('/api/meetings/<int:meeting_id>')
@@ -1380,15 +1398,16 @@ def upload_photo(report_id):
     db = get_db()
     try:
         sort_order = db.execute(
-            "SELECT COALESCE(MAX(sort_order),0)+1 FROM photos WHERE report_id=?",
+            "SELECT COALESCE(MAX(sort_order),0)+1 AS next_order FROM photos WHERE report_id=?",
             (report_id,)
-        ).fetchone()[0]
+        ).fetchone()['next_order']
         cur = db.execute(
-            "INSERT INTO photos (report_id, file_path, caption, sort_order, remark_id) VALUES (?,?,?,?,?)",
+            "INSERT INTO photos (report_id, file_path, caption, sort_order, remark_id) VALUES (?,?,?,?,?) RETURNING id",
             (report_id, filename, caption, sort_order, remark_id)
         )
+        _nid = cur.fetchone()['id']
         db.commit()
-        row = db.execute("SELECT * FROM photos WHERE id=?", (cur.lastrowid,)).fetchone()
+        row = db.execute("SELECT * FROM photos WHERE id=?", (_nid,)).fetchone()
         result = dict(row)
     except Exception:
         db.rollback()
@@ -1482,11 +1501,12 @@ def add_acceptance_control(report_id):
     d = request.json or {}
     with db_conn() as db:
         cur = db.execute(
-            "INSERT INTO acceptance_control (report_id, section_id, work_stage, controlled_operations, control_method, status, deviation_note, engineer_id, contractor_id) VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO acceptance_control (report_id, section_id, work_stage, controlled_operations, control_method, status, deviation_note, engineer_id, contractor_id) VALUES (?,?,?,?,?,?,?,?,?) RETURNING id",
             (report_id, d.get('section_id'), d.get('work_stage'), d.get('controlled_operations'), d.get('control_method'), d.get('status',''), d.get('deviation_note',''), d.get('engineer_id'), d.get('contractor_id'))
         )
+        _nid = cur.fetchone()['id']
         db.commit()
-        row = db.execute("SELECT ac.*, s.name as section_name, c.name as contractor_name FROM acceptance_control ac LEFT JOIN sections s ON s.id=ac.section_id LEFT JOIN contractors c ON c.id=ac.contractor_id WHERE ac.id=?", (cur.lastrowid,)).fetchone()
+        row = db.execute("SELECT ac.*, s.name as section_name, c.name as contractor_name FROM acceptance_control ac LEFT JOIN sections s ON s.id=ac.section_id LEFT JOIN contractors c ON c.id=ac.contractor_id WHERE ac.id=?", (_nid,)).fetchone()
         return ok(dict(row)), 201
 
 @app.delete('/api/acceptance_control/<int:ac_id>')
@@ -1505,13 +1525,14 @@ def add_ks2_check(report_id):
     d = request.json or {}
     with db_conn() as db:
         cur = db.execute(
-            "INSERT INTO ks2_check (report_id, contractor_name, object_work, ks2_number, ks3_number, has_ks3, has_ks6a, has_id, engineer_id) VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO ks2_check (report_id, contractor_name, object_work, ks2_number, ks3_number, has_ks3, has_ks6a, has_id, engineer_id) VALUES (?,?,?,?,?,?,?,?,?) RETURNING id",
             (report_id, d.get('contractor_name'), d.get('object_work'), d.get('ks2_number'),
              d.get('ks3_number'), 1 if d.get('has_ks3') else 0,
              1 if d.get('has_ks6a') else 0, 1 if d.get('has_id') else 0, d.get('engineer_id'))
         )
+        _nid = cur.fetchone()['id']
         db.commit()
-        row = db.execute("SELECT * FROM ks2_check WHERE id=?", (cur.lastrowid,)).fetchone()
+        row = db.execute("SELECT * FROM ks2_check WHERE id=?", (_nid,)).fetchone()
         return ok(dict(row)), 201
 
 @app.delete('/api/ks2_check/<int:ks2_id>')
@@ -1529,6 +1550,8 @@ def run_migration():
         u = db.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
         if not u or u['role'] not in ADMIN_ROLES:
             return err('Доступ запрещён', 403)
+        if IS_POSTGRES:
+            return ok('Не требуется: схема PostgreSQL создаётся из db/schema_postgres.sql')
         try:
             db.executescript("""
             CREATE TABLE IF NOT EXISTS acceptance_control (
@@ -1554,18 +1577,18 @@ def run_migration():
             );
             """)
             pwd = hashlib.sha256(b'password123').hexdigest()
-            db.execute("INSERT OR IGNORE INTO users (full_name,email,role,tj_user_id,password_hash) VALUES ('Ухов Илья Викторович','uhov@stroymanager.ru','engineer','uhov_tj_001','"+pwd+"')")
-            db.execute("INSERT OR IGNORE INTO objects (name,address,client_name,tj_object_id) VALUES ('IQ Гатчина (участок 6)','Ленинградская обл., г. Гатчина','ЛСТ Генподряд','tj_gatchina_006')")
+            db.execute("INSERT INTO users (full_name,email,role,tj_user_id,password_hash) VALUES ('Ухов Илья Викторович','uhov@stroymanager.ru','engineer','uhov_tj_001','"+pwd+"') ON CONFLICT DO NOTHING")
+            db.execute("INSERT INTO objects (name,address,client_name,tj_object_id) VALUES ('IQ Гатчина (участок 6)','Ленинградская обл., г. Гатчина','ЛСТ Генподряд','tj_gatchina_006') ON CONFLICT DO NOTHING")
             gid = db.execute("SELECT id FROM objects WHERE tj_object_id='tj_gatchina_006'").fetchone()[0]
             uid = db.execute("SELECT id FROM users WHERE email='uhov@stroymanager.ru'").fetchone()[0]
             aid_row = db.execute("SELECT id FROM users WHERE role IN ('root','admin')").fetchone()
             aid = aid_row[0] if aid_row else None
             for name in ['Пятно застройки','Блок 3','ПОС']:
-                db.execute("INSERT OR IGNORE INTO sections (object_id,name) VALUES (?,?)",(gid,name))
+                db.execute("INSERT INTO sections (object_id,name) VALUES (?,?) ON CONFLICT DO NOTHING",(gid,name))
             for name,wt in [('ООО Гелиос','ПОС, замещение грунта'),('ООО Фортес','Лидерное бурение, сваи')]:
-                db.execute("INSERT OR IGNORE INTO contractors (object_id,name,work_type) VALUES (?,?,?)",(gid,name,wt))
-            db.execute("INSERT OR IGNORE INTO object_users (object_id,user_id) VALUES (?,?)",(gid,uid))
-            if aid: db.execute("INSERT OR IGNORE INTO object_users (object_id,user_id) VALUES (?,?)",(gid,aid))
+                db.execute("INSERT INTO contractors (object_id,name,work_type) VALUES (?,?,?) ON CONFLICT DO NOTHING",(gid,name,wt))
+            db.execute("INSERT INTO object_users (object_id,user_id) VALUES (?,?) ON CONFLICT DO NOTHING",(gid,uid))
+            if aid: db.execute("INSERT INTO object_users (object_id,user_id) VALUES (?,?) ON CONFLICT DO NOTHING",(gid,aid))
             db.commit()
             return ok('Миграция выполнена успешно')
         except Exception as e:
@@ -1647,10 +1670,11 @@ def create_project():
     d = request.json or {}
     if not d.get('name'): return err('name обязателен')
     with db_conn() as db:
-        cur = db.execute("INSERT INTO projects (name, description, tj_project_id) VALUES (?,?,?)",
+        cur = db.execute("INSERT INTO projects (name, description, tj_project_id) VALUES (?,?,?) RETURNING id",
             (d['name'], d.get('description'), d.get('tj_project_id')))
+        _nid = cur.fetchone()['id']
         db.commit()
-        row = db.execute("SELECT * FROM projects WHERE id=?", (cur.lastrowid,)).fetchone()
+        row = db.execute("SELECT * FROM projects WHERE id=?", (_nid,)).fetchone()
         return ok(dict(row)), 201
 
 @app.patch('/api/projects/<int:proj_id>')
@@ -1704,7 +1728,7 @@ def _save_partner_projects(db, partner_id, project_ids):
     Синхронизирует partners.project_id с первым выбранным (для совместимости с шагом 2)."""
     db.execute("DELETE FROM partner_projects WHERE partner_id=?", (partner_id,))
     for pid in project_ids:
-        db.execute("INSERT OR IGNORE INTO partner_projects (partner_id, project_id) VALUES (?,?)",
+        db.execute("INSERT INTO partner_projects (partner_id, project_id) VALUES (?,?) ON CONFLICT DO NOTHING",
                    (partner_id, pid))
     compat_project_id = project_ids[0] if project_ids else None
     db.execute("UPDATE partners SET project_id=? WHERE id=?", (compat_project_id, partner_id))
@@ -1731,11 +1755,12 @@ def create_partner():
     compat_pid = project_ids[0] if project_ids else None
     with db_conn() as db:
         cur = db.execute(
-            "INSERT INTO partners (name, type, address, contact_name, contact_role, inn, phone, email, notes, work_type, project_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO partners (name, type, address, contact_name, contact_role, inn, phone, email, notes, work_type, project_id) VALUES (?,?,?,?,?,?,?,?,?,?,?) RETURNING id",
             (d['name'], d.get('type'), d.get('address'), d.get('contact_name'),
              d.get('contact_role'), d.get('inn'), d.get('phone'), d.get('email'),
              d.get('notes'), d.get('work_type'), compat_pid))
-        pid = cur.lastrowid
+        _nid = cur.fetchone()['id']
+        pid = _nid
         _save_partner_projects(db, pid, project_ids)
         db.commit()
         row = db.execute("SELECT * FROM partners WHERE id=?", (pid,)).fetchone()
@@ -1791,10 +1816,11 @@ def add_my_section(obj_id):
     d = request.json or {}
     if not d.get('name') or not d.get('user_id'): return err('name и user_id обязательны')
     with db_conn() as db:
-        cur = db.execute("INSERT INTO user_sections (object_id, user_id, name) VALUES (?,?,?)",
+        cur = db.execute("INSERT INTO user_sections (object_id, user_id, name) VALUES (?,?,?) RETURNING id",
             (obj_id, d['user_id'], d['name']))
+        _nid = cur.fetchone()['id']
         db.commit()
-        row = db.execute("SELECT * FROM user_sections WHERE id=?", (cur.lastrowid,)).fetchone()
+        row = db.execute("SELECT * FROM user_sections WHERE id=?", (_nid,)).fetchone()
         return ok(dict(row)), 201
 
 @app.patch('/api/my_sections/<int:sec_id>')
@@ -2319,6 +2345,8 @@ def migrate_v2():
         u = db.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
         if not u or u['role'] not in ADMIN_ROLES:
             return err('Доступ запрещён', 403)
+        if IS_POSTGRES:
+            return ok('Не требуется: схема PostgreSQL создаётся из db/schema_postgres.sql')
         try:
             db.executescript("""
             CREATE TABLE IF NOT EXISTS projects (
@@ -2377,6 +2405,12 @@ def backup_db():
         user = db.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
         if not user or user['role'] not in ADMIN_ROLES:
             return err('Доступ запрещён', 403)
+    if IS_POSTGRES:
+        # У PostgreSQL нет файла базы, который можно просто скопировать.
+        # Отвечаем отказом, а не мнимым успехом: администратор не должен
+        # решить, что копия снята, когда она не снята.
+        return err('Резервная копия PostgreSQL снимается на сервере командой '
+                   'pg_dump, из интерфейса она недоступна', 503)
     # Копируем БД во временный файл чтобы не блокировать основную
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.db')
     shutil.copy2(DB_PATH, tmp.name)

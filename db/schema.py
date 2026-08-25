@@ -1,10 +1,21 @@
 # SK-pilot (СК-пилот) — система ежедневных сводок строительного контроля.
 # Автор: Vladislav Nikonenko (идея и разработка). © 2026. Версия 1.5.
 
-import sqlite3, os
+import sqlite3, os, re
 
-# Путь к базе. Приоритет — переменная окружения SK_DB_PATH: она позволяет
-# автотестам работать на отдельной базе и не иметь доступа к боевой.
+# ─────────────────────────────────────────────────────────────────────────
+# ВЫБОР СУБД
+#
+# SK_DB_TYPE=postgres  → PostgreSQL (psycopg2)
+# иначе                → SQLite, поведение полностью прежнее
+#
+# Переключение и откат делаются переменной окружения, без правки кода.
+# ─────────────────────────────────────────────────────────────────────────
+DB_TYPE = (os.environ.get('SK_DB_TYPE') or 'sqlite').strip().lower()
+IS_POSTGRES = DB_TYPE in ('postgres', 'postgresql', 'pg')
+
+# Путь к базе SQLite. Приоритет — переменная окружения SK_DB_PATH: она
+# позволяет автотестам работать на отдельной базе и не иметь доступа к боевой.
 # Без неё поведение прежнее: /var/data на Render, иначе папка db/.
 _RENDER_DISK = '/var/data'
 if os.environ.get('SK_DB_PATH'):
@@ -14,7 +25,112 @@ elif os.path.isdir(_RENDER_DISK):
 else:
     DB_PATH = os.path.join(os.path.dirname(__file__), 'pilot.db')
 
+# Целевая схема PostgreSQL — единственный источник правды по структуре
+POSTGRES_DDL = os.path.join(os.path.dirname(__file__), 'schema_postgres.sql')
+
+
+def _pg_dsn():
+    """Параметры подключения к PostgreSQL из окружения."""
+    if os.environ.get('SK_PG_DSN'):
+        return os.environ['SK_PG_DSN']
+    return (
+        f"host={os.environ.get('SK_PG_HOST', 'localhost')} "
+        f"port={os.environ.get('SK_PG_PORT', '5432')} "
+        f"dbname={os.environ.get('SK_PG_DB', 'sk_pilot')} "
+        f"user={os.environ.get('SK_PG_USER', 'sk')} "
+        f"password={os.environ.get('SK_PG_PASSWORD', '')}"
+    )
+
+
+# ── Перевод SQL из диалекта SQLite в диалект PostgreSQL ──────────────────
+_GROUP_CONCAT = re.compile(r'\bGROUP_CONCAT\s*\(', re.IGNORECASE)
+
+
+def translate_sql(sql):
+    """Готовит запрос, написанный под SQLite, к исполнению в PostgreSQL.
+
+    Порядок операций важен: сначала экранируем литеральные '%' (иначе
+    psycopg2 примет их за подстановку — например в "LIKE '%Окла%'"),
+    и только потом меняем плейсхолдеры '?' на '%s'.
+
+    В запросах приложения литеральных '?' нет — это проверено; единственный
+    знак вопроса вне SQL находится в регулярном выражении safe_name(),
+    которое в execute() не передаётся.
+    """
+    sql = sql.replace('%', '%%')
+    sql = sql.replace('?', '%s')
+    # GROUP_CONCAT(x, ', ') → string_agg(x, ', ')
+    sql = _GROUP_CONCAT.sub('string_agg(', sql)
+    return sql
+
+
+def _sqlite_like_cursor():
+    """Курсор, чьи строки ведут себя как sqlite3.Row.
+
+    RealDictRow — словарь и доступа по числовому индексу не имеет, а
+    sqlite3.Row поддерживает и row['имя'], и row[0]. Чтобы обёртка была
+    полноценной заменой, добавляем второе: иначе код вида
+    .fetchone()[0] молча ломается только на PostgreSQL.
+    """
+    from psycopg2.extras import RealDictCursor, RealDictRow
+
+    class Row(RealDictRow):
+        def __getitem__(self, key):
+            if isinstance(key, int):
+                return list(self.values())[key]
+            return super().__getitem__(key)
+
+    class Cursor(RealDictCursor):
+        def __init__(self, *a, **kw):
+            super().__init__(*a, **kw)
+            self.row_factory = Row
+
+    return Cursor
+
+
+class PgConnection:
+    """Обёртка над psycopg2, повторяющая интерфейс sqlite3.Connection.
+
+    Благодаря ей все вызовы вида db.execute(sql, params).fetchone() в app.py
+    работают без изменений: курсор заводится внутри, строки возвращаются
+    с доступом и по имени поля, и по индексу.
+    """
+
+    def __init__(self, raw):
+        self._raw = raw
+
+    def execute(self, sql, params=()):
+        cur = self._raw.cursor(cursor_factory=_sqlite_like_cursor())
+        cur.execute(translate_sql(sql), params)
+        return cur
+
+    def executescript(self, script):
+        """В PostgreSQL используется только при первичном создании схемы.
+        Пути приложения, которые звали executescript (auto_migrate,
+        /api/migrate, /api/migrate_v2), под PostgreSQL не исполняются."""
+        cur = self._raw.cursor()
+        cur.execute(script)
+        cur.close()
+
+    def commit(self):
+        self._raw.commit()
+
+    def rollback(self):
+        self._raw.rollback()
+
+    def close(self):
+        self._raw.close()
+
+    @property
+    def raw(self):
+        return self._raw
+
+
 def get_db():
+    if IS_POSTGRES:
+        import psycopg2
+        conn = psycopg2.connect(_pg_dsn())
+        return PgConnection(conn)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
@@ -22,7 +138,11 @@ def get_db():
     conn.execute("PRAGMA busy_timeout = 5000")
     return conn
 
+
 def init_db():
+    if IS_POSTGRES:
+        _init_postgres()
+        return
     conn = get_db()
     c = conn.cursor()
 
@@ -249,6 +369,27 @@ def init_db():
     conn.commit()
     conn.close()
     print(f"✅ База данных инициализирована: {DB_PATH}")
+
+
+def _init_postgres():
+    """Создаёт схему PostgreSQL из целевого DDL — один раз, идемпотентно.
+
+    auto_migrate() под PostgreSQL не выполняется: накопленная история
+    ALTER TABLE относилась к конкретному файлу pilot.db и после переезда
+    неактуальна. Дальнейшие изменения схемы — отдельными миграциями.
+    """
+    if not os.path.exists(POSTGRES_DDL):
+        raise RuntimeError(f'Не найден DDL схемы PostgreSQL: {POSTGRES_DDL}')
+    with open(POSTGRES_DDL, encoding='utf-8') as f:
+        ddl = f.read()
+    conn = get_db()
+    try:
+        conn.executescript(ddl)
+        conn.commit()
+    finally:
+        conn.close()
+    print('✅ Схема PostgreSQL готова (db/schema_postgres.sql)')
+
 
 if __name__ == '__main__':
     init_db()
