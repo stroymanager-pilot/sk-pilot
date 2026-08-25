@@ -661,7 +661,9 @@ def auth_admin_set_password():
 def index():
     return send_from_directory('static', 'login.html')
 
-UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
+# Каталог загрузок. SK_UPLOAD_DIR позволяет автотестам писать во временную
+# папку и не трогать боевые фотографии.
+UPLOAD_FOLDER = os.environ.get('SK_UPLOAD_DIR') or os.path.join(os.path.dirname(__file__), 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['MAX_CONTENT_LENGTH'] = 30 * 1024 * 1024  # 30 MB max на файл
 
@@ -1922,7 +1924,7 @@ def _export_zip_inner(db, user_id, project_id):
     photos = db.execute(pq, pparams).fetchall()
     # db will be closed by the caller (export_zip db_conn context manager)
 
-    UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
+    UPLOAD_FOLDER = os.environ.get('SK_UPLOAD_DIR') or os.path.join(os.path.dirname(__file__), 'uploads')
 
     # Загружаем детали каждой сводки (контроль, персонал, замечания)
     report_details = {}
@@ -2108,7 +2110,7 @@ def _export_day_inner(db, date_str):
         WHERE dr.report_date=?
     """, (date_str,)).fetchall()
 
-    UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
+    UPLOAD_FOLDER = os.environ.get('SK_UPLOAD_DIR') or os.path.join(os.path.dirname(__file__), 'uploads')
 
     report_details = {}
     for r in reports:

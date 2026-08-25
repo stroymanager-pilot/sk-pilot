@@ -3,9 +3,13 @@
 
 import sqlite3, os
 
-# На Render используем persistent disk /var/data; локально — папка db/
+# Путь к базе. Приоритет — переменная окружения SK_DB_PATH: она позволяет
+# автотестам работать на отдельной базе и не иметь доступа к боевой.
+# Без неё поведение прежнее: /var/data на Render, иначе папка db/.
 _RENDER_DISK = '/var/data'
-if os.path.isdir(_RENDER_DISK):
+if os.environ.get('SK_DB_PATH'):
+    DB_PATH = os.environ['SK_DB_PATH']
+elif os.path.isdir(_RENDER_DISK):
     DB_PATH = os.path.join(_RENDER_DISK, 'pilot.db')
 else:
     DB_PATH = os.path.join(os.path.dirname(__file__), 'pilot.db')
