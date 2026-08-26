@@ -55,6 +55,41 @@ SK_DB_TYPE=postgres python3 app.py  # PostgreSQL
 PostgreSQL не выполняется: он относился к истории конкретного файла
 `pilot.db`.
 
+### Резервное копирование
+
+На SQLite кнопка «Резервная копия» в админке отдаёт файл базы, на
+PostgreSQL — дамп формата custom, сделанный `pg_dump`. Нужен пакет
+`postgresql-client`; если бинарник лежит не в `PATH` сервисного
+пользователя, путь задаётся переменной `SK_PG_DUMP`.
+
+Автоматические ежедневные копии — скрипт `scripts/pg_backup.sh`: кладёт
+дамп в `/root/backups/`, хранит последние 14 дней. Старые копии удаляются
+только после успешного создания новой.
+
+```bash
+sudo install -m 700 scripts/pg_backup.sh /usr/local/bin/sk-pg-backup
+```
+
+Пароль — в `/root/.pgpass` (режим 600), чтобы не светился в списке процессов:
+
+```bash
+sudo sh -c 'echo "localhost:5432:sk_pilot:sk:ПАРОЛЬ" > /root/.pgpass && chmod 600 /root/.pgpass'
+```
+
+Строка для `sudo crontab -e` — запуск каждый день в 03:30:
+
+```
+30 3 * * * SK_PG_DB=sk_pilot SK_PG_USER=sk /usr/local/bin/sk-pg-backup >/dev/null 2>&1
+```
+
+Восстановление из копии:
+
+```bash
+pg_restore -h localhost -U sk -d sk_pilot --clean --if-exists /root/backups/sk_pilot_2026-08-29_0330.dump
+```
+
+---
+
 Перенос данных из SQLite в PostgreSQL с сохранением всех идентификаторов:
 
 ```bash

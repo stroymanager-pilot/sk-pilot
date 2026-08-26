@@ -5,7 +5,7 @@
 """
 import pytest
 
-from conftest import EMAIL, IS_POSTGRES, UID, as_role
+from conftest import EMAIL, UID, as_role
 
 # Эндпоинты, доступные только администраторам организации (root и admin).
 # {uid} подставляется: эти эндпоинты определяют пользователя по user_id
@@ -125,16 +125,15 @@ def test_инженер_не_читает_чужой_реестр_подмено
     assert client.get(f'/api/all_reports?requester_id={UID["root"]}').status_code == 403
 
 
-# ── Резервная копия: права те же, но результат зависит от СУБД ──────────
-# На SQLite отдаётся файл базы, на PostgreSQL — отказ 503 с пояснением
-# (копия снимается на сервере через pg_dump). Права проверяем одинаково.
+# ── Резервная копия ─────────────────────────────────────────────────────
+# Здесь проверяются только права. Само содержимое копии зависит от СУБД
+# (файл базы на SQLite, дамп pg_dump на PostgreSQL) и проверяется
+# в test_exports.py.
 
 @pytest.mark.parametrize('role', ['root', 'admin'])
 def test_резервная_копия_доступна_администраторам(client, role):
     as_role(client, role)
-    код = client.get(f'/api/admin/backup_db?user_id={UID[role]}').status_code
-    assert код != 403
-    assert код == (503 if IS_POSTGRES else 200)
+    assert client.get(f'/api/admin/backup_db?user_id={UID[role]}').status_code != 403
 
 
 @pytest.mark.parametrize('role', ['senior', 'engineer'])

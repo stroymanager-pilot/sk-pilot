@@ -29,17 +29,39 @@ else:
 POSTGRES_DDL = os.path.join(os.path.dirname(__file__), 'schema_postgres.sql')
 
 
+def pg_params():
+    """Параметры подключения к PostgreSQL словарём.
+
+    Единственный источник правды: им пользуются и psycopg2, и pg_dump
+    при выгрузке резервной копии. Если задан SK_PG_DSN — разбираем его,
+    иначе собираем из отдельных переменных.
+    """
+    if os.environ.get('SK_PG_DSN'):
+        from psycopg2.extensions import parse_dsn
+        d = parse_dsn(os.environ['SK_PG_DSN'])
+        return {
+            'host': d.get('host', 'localhost'),
+            'port': str(d.get('port', '5432')),
+            'dbname': d.get('dbname', ''),
+            'user': d.get('user', ''),
+            'password': d.get('password', ''),
+        }
+    return {
+        'host': os.environ.get('SK_PG_HOST', 'localhost'),
+        'port': os.environ.get('SK_PG_PORT', '5432'),
+        'dbname': os.environ.get('SK_PG_DB', 'sk_pilot'),
+        'user': os.environ.get('SK_PG_USER', 'sk'),
+        'password': os.environ.get('SK_PG_PASSWORD', ''),
+    }
+
+
 def _pg_dsn():
-    """Параметры подключения к PostgreSQL из окружения."""
+    """Строка подключения для psycopg2."""
     if os.environ.get('SK_PG_DSN'):
         return os.environ['SK_PG_DSN']
-    return (
-        f"host={os.environ.get('SK_PG_HOST', 'localhost')} "
-        f"port={os.environ.get('SK_PG_PORT', '5432')} "
-        f"dbname={os.environ.get('SK_PG_DB', 'sk_pilot')} "
-        f"user={os.environ.get('SK_PG_USER', 'sk')} "
-        f"password={os.environ.get('SK_PG_PASSWORD', '')}"
-    )
+    p = pg_params()
+    return (f"host={p['host']} port={p['port']} dbname={p['dbname']} "
+            f"user={p['user']} password={p['password']}")
 
 
 # ── Перевод SQL из диалекта SQLite в диалект PostgreSQL ──────────────────

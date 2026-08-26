@@ -2395,6 +2395,61 @@ def migrate_v2():
 # РЕЗЕРВНАЯ КОПИЯ БД (только для администратора)
 # ─────────────────────────────────────────────────────────
 
+def _backup_postgres():
+    """Резервная копия PostgreSQL через pg_dump в формате custom (-Fc).
+
+    Пароль передаётся переменной окружения PGPASSWORD и не попадает
+    ни в аргументы команды (их видно в ps), ни в логи, ни в ответ.
+    Путь к pg_dump можно задать через SK_PG_DUMP — у системного
+    пользователя сервиса бинарник не всегда есть в PATH.
+    """
+    import subprocess, tempfile
+    from db.schema import pg_params
+
+    p = pg_params()
+    dump_bin = os.environ.get('SK_PG_DUMP') or 'pg_dump'
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.dump')
+    tmp.close()
+
+    env = os.environ.copy()
+    if p['password']:
+        env['PGPASSWORD'] = p['password']
+
+    cmd = [dump_bin, '-Fc', '--no-password',
+           '-h', p['host'], '-p', str(p['port']),
+           '-U', p['user'], '-d', p['dbname'],
+           '-f', tmp.name]
+    try:
+        proc = subprocess.run(cmd, env=env, capture_output=True, timeout=600)
+    except FileNotFoundError:
+        os.unlink(tmp.name)
+        return err(f'Не найдена программа pg_dump ({dump_bin}). Установите '
+                   'postgresql-client или задайте путь в SK_PG_DUMP', 500)
+    except subprocess.TimeoutExpired:
+        if os.path.exists(tmp.name):
+            os.unlink(tmp.name)
+        return err('pg_dump не завершился за 10 минут, копия не создана', 504)
+
+    if proc.returncode != 0:
+        # stderr безопасен: пароль ушёл через окружение, а не аргументом
+        detail = (proc.stderr or b'').decode('utf-8', 'replace').strip()[:400]
+        if os.path.exists(tmp.name):
+            os.unlink(tmp.name)
+        return err(f'pg_dump завершился с ошибкой: {detail or "код " + str(proc.returncode)}', 500)
+
+    # Пустой файл — это не копия. Лучше честная ошибка, чем ложный успех.
+    if not os.path.exists(tmp.name) or os.path.getsize(tmp.name) == 0:
+        if os.path.exists(tmp.name):
+            os.unlink(tmp.name)
+        return err('pg_dump отработал, но файл копии пуст — копия не создана', 500)
+
+    date_str = datetime.now().strftime('%Y-%m-%d')
+    return send_file(tmp.name, as_attachment=True,
+                     download_name=f'sk_pilot_{date_str}.dump',
+                     mimetype='application/octet-stream')
+
+
 @app.get('/api/admin/backup_db')
 def backup_db():
     import shutil, tempfile
@@ -2406,11 +2461,7 @@ def backup_db():
         if not user or user['role'] not in ADMIN_ROLES:
             return err('Доступ запрещён', 403)
     if IS_POSTGRES:
-        # У PostgreSQL нет файла базы, который можно просто скопировать.
-        # Отвечаем отказом, а не мнимым успехом: администратор не должен
-        # решить, что копия снята, когда она не снята.
-        return err('Резервная копия PostgreSQL снимается на сервере командой '
-                   'pg_dump, из интерфейса она недоступна', 503)
+        return _backup_postgres()
     # Копируем БД во временный файл чтобы не блокировать основную
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.db')
     shutil.copy2(DB_PATH, tmp.name)
