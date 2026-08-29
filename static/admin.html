@@ -1306,7 +1306,7 @@ async function loadAllReports() {
   const filterUserId = document.getElementById('filterEngineer').value;
   let url = `${API}/api/all_reports?requester_id=${userId}`;
   if (projId) url += `&project_id=${projId}`;
-  if (filterUserId) url += `&user_id=${filterUserId}`;
+  if (filterUserId) url += `&engineer_id=${filterUserId}`;
   const res = await fetch(url).then(r=>r.json());
   let reports = res.data || [];
   const status = document.getElementById('filterStatus').value;

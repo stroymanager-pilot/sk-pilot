@@ -453,6 +453,36 @@ app.config.update(
     PERMANENT_SESSION_LIFETIME=timedelta(days=30),
 )
 
+#: значение, которое заведомо не совпадёт ни с одним id — для фильтров
+#: с нечисловым значением: показать ничего, а не всё
+NO_MATCH = -1
+
+
+def arg_int(name, invalid=None):
+    """Числовой параметр запроса, приведённый к int.
+
+    HTTP приносит всё строками. SQLite сравнивал строку с числовой колонкой
+    молча и ничего не находил, PostgreSQL на нечисловом значении вернул бы
+    ошибку 500. Приводим явно: '4' → 4.
+
+    Отсутствующий параметр — всегда None: вызывающий код проверяет его
+    через `if`, и подстановка значения здесь включила бы фильтр, которого
+    пользователь не просил.
+
+    Аргумент invalid — что вернуть, если параметр ПЕРЕДАН, но не число:
+      NO_MATCH для фильтров (показать пусто, а не всё, как делал SQLite),
+      None для параметров действующего пользователя (сработает проверка
+      прав и вернётся 403).
+    """
+    v = request.args.get(name)
+    if v is None or v == '':
+        return None
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return invalid
+
+
 def current_user_id():
     """id вошедшего пользователя из серверной сессии (или None)."""
     return session.get('uid')
@@ -612,7 +642,7 @@ ENGINEER_ROLES = ('engineer', 'senior')
 def _actor_row(db):
     """Кто выполняет действие: приоритет у сессии, иначе user_id из запроса
     (обратная совместимость на переходный период)."""
-    aid = current_user_id() or request.args.get('user_id')
+    aid = current_user_id() or arg_int('user_id')
     if not aid:
         return None
     return db.execute(
@@ -637,7 +667,7 @@ def _can_manage(actor, target_role):
 def auth_admin_set_password():
     """Только роль root: выдать пользователю сгенерированный пароль.
     Пароль возвращается в ответе ОДИН раз — в БД лежит только хеш."""
-    actor_id = current_user_id() or request.args.get('user_id')
+    actor_id = current_user_id() or arg_int('user_id')
     d = request.json or {}
     target_id = d.get('user_id')
     if not actor_id:
@@ -713,7 +743,7 @@ def db_conn():
 
 @app.get('/api/objects')
 def list_objects():
-    user_id = request.args.get('user_id')
+    user_id = arg_int('user_id')
     with db_conn() as db:
         if user_id:
             user = db.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
@@ -1452,7 +1482,7 @@ def serve_upload(filename):
 @app.get('/api/admin/photo_check')
 def photo_check():
     """Диагностика: проверяем какие фото есть в БД и существуют ли файлы на диске"""
-    user_id = request.args.get('user_id')
+    user_id = arg_int('user_id')
     with db_conn() as db:
         u = db.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
         if not u or u['role'] not in ADMIN_ROLES:
@@ -1545,7 +1575,7 @@ def delete_ks2_check(ks2_id):
 
 @app.post('/api/migrate')
 def run_migration():
-    user_id = request.args.get('user_id')
+    user_id = arg_int('user_id')
     with db_conn() as db:
         u = db.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
         if not u or u['role'] not in ADMIN_ROLES:
@@ -1597,7 +1627,7 @@ def run_migration():
 
 @app.post('/api/fix_duplicates')
 def fix_duplicates():
-    user_id = request.args.get('user_id')
+    user_id = arg_int('user_id')
     with db_conn() as db:
         u = db.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
         if not u or u['role'] not in ADMIN_ROLES:
@@ -1736,7 +1766,7 @@ def _save_partner_projects(db, partner_id, project_ids):
 @app.get('/api/partners')
 def list_partners():
     with db_conn() as db:
-        project_id = request.args.get('project_id')
+        project_id = arg_int('project_id', NO_MATCH)
         if project_id:
             rows = db.execute(
                 "SELECT * FROM partners WHERE is_active=1 AND (project_id=? OR project_id IS NULL) ORDER BY name",
@@ -1796,7 +1826,7 @@ def delete_partner(pid):
 
 @app.get('/api/objects/<int:obj_id>/my_sections')
 def list_my_sections(obj_id):
-    user_id = request.args.get('user_id')
+    user_id = arg_int('user_id')
     with db_conn() as db:
         if user_id:
             rows = db.execute("""
@@ -1847,7 +1877,7 @@ def delete_my_section(sec_id):
 
 @app.get('/api/my_reports')
 def my_reports():
-    user_id = request.args.get('user_id')
+    user_id = arg_int('user_id')
     if not user_id: return err('user_id обязателен')
     with db_conn() as db:
         # Только сводки по объектам, на которые инженер сейчас назначен
@@ -1870,10 +1900,13 @@ def my_reports():
 @app.get('/api/all_reports')
 def all_reports():
     with db_conn() as db:
-        requester_id = request.args.get('requester_id')
-        project_id = request.args.get('project_id')
-        object_id = request.args.get('object_id')
-        user_id = request.args.get('user_id')
+        requester_id = arg_int('requester_id')
+        project_id = arg_int('project_id', NO_MATCH)
+        object_id = arg_int('object_id', NO_MATCH)
+        # Фильтр по инженеру называется engineer_id, а не user_id: имя user_id
+        # перезаписывается из сессии защитой от подмены действующего
+        # пользователя (_session_identity_priority), и фильтр обнулялся бы.
+        engineer_id = arg_int('engineer_id', NO_MATCH)
         # Проверка прав: admin или senior с can_view_all=1
         if requester_id:
             req = db.execute("SELECT role, can_view_all FROM users WHERE id=?", (requester_id,)).fetchone()
@@ -1894,7 +1927,7 @@ def all_reports():
         params = []
         if project_id: query += " AND o.project_id=?"; params.append(project_id)
         if object_id: query += " AND o.id=?"; params.append(object_id)
-        if user_id: query += " AND dr.user_id=?"; params.append(user_id)
+        if engineer_id: query += " AND dr.user_id=?"; params.append(engineer_id)
         query += " ORDER BY dr.report_date DESC LIMIT 200"
         rows = db.execute(query, params).fetchall()
         return ok(rows_to_list(rows))
@@ -1906,8 +1939,8 @@ def all_reports():
 @app.get('/api/admin/export_zip')
 def export_zip():
     import traceback
-    user_id = request.args.get('user_id')
-    project_id = request.args.get('project_id')
+    user_id = arg_int('user_id')
+    project_id = arg_int('project_id', NO_MATCH)
     with db_conn() as db:
         # Проверка прав
         user = db.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
@@ -2100,7 +2133,7 @@ def _export_zip_inner(db, user_id, project_id):
 @app.get('/api/admin/export_day')
 def export_day():
     import traceback, zipfile, io, csv, os
-    user_id   = request.args.get('user_id')
+    user_id   = arg_int('user_id')
     date_str  = request.args.get('date', '')
     if not date_str:
         return err('Параметр date обязателен')
@@ -2292,9 +2325,9 @@ def _export_day_inner(db, date_str):
 def all_photos():
     """Все фото — для admin или senior с can_view_all=1"""
     with db_conn() as db:
-        requester_id = request.args.get('requester_id')
-        project_id = request.args.get('project_id')
-        object_id = request.args.get('object_id')
+        requester_id = arg_int('requester_id')
+        project_id = arg_int('project_id', NO_MATCH)
+        object_id = arg_int('object_id', NO_MATCH)
         # Проверка прав: admin или senior с can_view_all=1
         if requester_id:
             req = db.execute("SELECT role, can_view_all FROM users WHERE id=?", (requester_id,)).fetchone()
@@ -2321,7 +2354,7 @@ def all_photos():
 @app.get('/api/my_photos')
 def my_photos():
     """Фото инженера"""
-    user_id = request.args.get('user_id')
+    user_id = arg_int('user_id')
     if not user_id: return err('user_id обязателен')
     with db_conn() as db:
         rows = db.execute("""
@@ -2340,7 +2373,7 @@ def my_photos():
 
 @app.post('/api/migrate_v2')
 def migrate_v2():
-    user_id = request.args.get('user_id')
+    user_id = arg_int('user_id')
     with db_conn() as db:
         u = db.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
         if not u or u['role'] not in ADMIN_ROLES:
@@ -2454,7 +2487,7 @@ def _backup_postgres():
 def backup_db():
     import shutil, tempfile
     from db.schema import DB_PATH
-    user_id = request.args.get('user_id')
+    user_id = arg_int('user_id')
     # Проверяем что запрашивает администратор
     with db_conn() as db:
         user = db.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
