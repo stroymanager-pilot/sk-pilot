@@ -7,7 +7,7 @@ from flask import Flask, request, jsonify, send_from_directory, send_file, sessi
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 from contextlib import contextmanager
-import os, sys, hashlib, uuid, secrets
+import os, sys, hashlib, uuid, secrets, json
 from datetime import datetime, date, timedelta
 
 try:
@@ -20,6 +20,7 @@ except ImportError:
 
 sys.path.insert(0, os.path.dirname(__file__))
 from db.schema import get_db, init_db, IS_POSTGRES
+import report_builder   # сборка блоков ежемесячного отчёта (шаг 2-2)
 
 # ── ОБРАБОТКА ИЗОБРАЖЕНИЙ ────────────────────────────────────
 _MAX_PX = 2000   # максимальная длинная сторона после ресайза
@@ -1727,10 +1728,24 @@ def update_project(proj_id):
     with db_conn() as db:
         fields = ['name', 'description', 'tj_project_id', 'is_active']
         updates = {k: v for k, v in d.items() if k in fields}
+        # Деактивация проекта с активными объектами: объекты останутся
+        # активными, но пропадут из интерфейса — назначить инженера и
+        # завести сводку по ним станет невозможно. Так и выпали объекты 5 и 9.
+        забытые = []
+        if str(updates.get('is_active', '')) == '0':
+            забытые = rows_to_list(db.execute(
+                "SELECT id, name FROM objects "
+                "WHERE project_id=? AND COALESCE(is_active,1)=1 ORDER BY id",
+                (proj_id,)).fetchall())
         if updates:
             sql = ', '.join(f"{k}=?" for k in updates)
             db.execute(f"UPDATE projects SET {sql} WHERE id=?", list(updates.values()) + [proj_id])
             db.commit()
+        if забытые:
+            return ok({'active_objects': забытые},
+                      warning='В проекте остались активные объекты: они пропадут '
+                              'из интерфейса, но продолжат считаться активными. '
+                              'Деактивируйте их отдельно.')
         return ok()
 
 @app.get('/api/projects/<int:proj_id>/objects')
@@ -1945,6 +1960,217 @@ def all_reports():
         query += " ORDER BY dr.report_date DESC LIMIT 200"
         rows = db.execute(query, params).fetchall()
         return ok(rows_to_list(rows))
+
+# ─────────────────────────────────────────────────────────
+# ЕЖЕМЕСЯЧНЫЙ ОТЧЁТ — сборка автоматических блоков (шаг 2-2)
+#
+# Отчёт строится по группе объектов, а не по объекту: «Суздальское» —
+# это два дома в одном документе. Экспорта в DOCX и PDF здесь нет,
+# он в подзадаче 2-4.
+# ─────────────────────────────────────────────────────────
+
+@app.get('/api/report_groups')
+def list_report_groups():
+    """Группы отчётов с их составом — для выпадающего списка на экране."""
+    user_id = arg_int('user_id')
+    with db_conn() as db:
+        u = db.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
+        if not u or u['role'] not in ADMIN_ROLES:
+            return err('Доступ запрещён', 403)
+        группы = rows_to_list(db.execute(
+            "SELECT id, name, client_name, report_title, COALESCE(is_active,1) AS is_active "
+            "FROM report_groups WHERE COALESCE(is_active,1)=1 ORDER BY name").fetchall())
+        for г in группы:
+            г['объекты'] = rows_to_list(db.execute("""
+                SELECT rgo.object_id, rgo.date_from, rgo.date_to,
+                       o.name, o.report_name, COALESCE(o.is_active,1) AS is_active
+                  FROM report_group_objects rgo
+                  JOIN objects o ON o.id = rgo.object_id
+                 WHERE rgo.report_group_id = ?
+                 ORDER BY rgo.object_id
+            """, (г['id'],)).fetchall())
+        return ok(группы)
+
+
+@app.post('/api/monthly_reports/generate')
+def generate_monthly_report():
+    """Собирает черновик отчёта за месяц по группе.
+
+    Повторная сборка обновляет автоматические блоки и не трогает те,
+    что помечены is_edited=1 — ручные правки переживают пересборку.
+    """
+    d = request.json or {}
+    user_id = arg_int('user_id')
+    group_id = d.get('report_group_id')
+    year, month = d.get('year'), d.get('month')
+
+    try:
+        group_id, year, month = int(group_id), int(year), int(month)
+    except (TypeError, ValueError):
+        return err('Нужны report_group_id, year и month')
+    if not 1 <= month <= 12:
+        return err('Месяц вне диапазона')
+    if (year, month) < report_builder.ПЕРИОД_С:
+        return err('Отчётный период начинается с августа 2026: '
+                   'более ранние сводки в отчёты не идут')
+
+    with db_conn() as db:
+        u = db.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
+        if not u or u['role'] not in ADMIN_ROLES:
+            return err('Доступ запрещён', 403)
+
+        собранное = report_builder.собрать(db, group_id, year, month)
+        if собранное is None:
+            return err('Группа отчёта не найдена', 404)
+
+        # Шапка отчёта: находим существующую или заводим новую
+        строка = db.execute(
+            "SELECT id, status FROM monthly_reports "
+            "WHERE report_group_id=? AND year=? AND month=? AND version=1",
+            (group_id, year, month)).fetchone()
+        if строка:
+            report_id = строка['id']
+        else:
+            шаблон = db.execute(
+                "SELECT id FROM report_templates WHERE COALESCE(is_active,1)=1 "
+                "ORDER BY id LIMIT 1").fetchone()
+            cur = db.execute(
+                "INSERT INTO monthly_reports (report_group_id, year, month, "
+                "template_id, created_by) VALUES (?,?,?,?,?) RETURNING id",
+                (group_id, year, month, шаблон['id'] if шаблон else None, user_id))
+            report_id = cur.fetchone()['id']
+
+        # Блоки: обновляем только неотредактированные
+        отредактированные = {
+            r['block_key'] for r in db.execute(
+                "SELECT block_key FROM monthly_report_blocks "
+                "WHERE report_id=? AND is_edited=1", (report_id,)).fetchall()}
+
+        сохранено, пропущено = 0, []
+        for ключ, содержимое in собранное['блоки'].items():
+            if ключ in отредактированные:
+                пропущено.append(ключ)
+                continue
+            json_текст = json.dumps(содержимое, ensure_ascii=False)
+            есть = db.execute(
+                "SELECT id FROM monthly_report_blocks WHERE report_id=? AND block_key=?",
+                (report_id, ключ)).fetchone()
+            if есть:
+                db.execute(
+                    "UPDATE monthly_report_blocks SET content_json=?, updated_by=?, "
+                    "updated_at=? WHERE id=?",
+                    (json_текст, user_id, datetime.now().isoformat(), есть['id']))
+            else:
+                db.execute(
+                    "INSERT INTO monthly_report_blocks (report_id, block_key, "
+                    "content_json, updated_by, updated_at) VALUES (?,?,?,?,?)",
+                    (report_id, ключ, json_текст, user_id, datetime.now().isoformat()))
+            сохранено += 1
+        db.commit()
+
+        собранное['report_id'] = report_id
+        собранное['сохранено_блоков'] = сохранено
+        собранное['сохранены_правки'] = пропущено
+        return ok(собранное)
+
+
+@app.get('/api/monthly_reports/<int:report_id>')
+def get_monthly_report(report_id):
+    """Ранее собранный черновик со всеми блоками."""
+    user_id = arg_int('user_id')
+    with db_conn() as db:
+        u = db.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
+        if not u or u['role'] not in ADMIN_ROLES:
+            return err('Доступ запрещён', 403)
+        шапка = db.execute("""
+            SELECT mr.*, g.name AS group_name, g.report_title
+              FROM monthly_reports mr
+              JOIN report_groups g ON g.id = mr.report_group_id
+             WHERE mr.id = ?
+        """, (report_id,)).fetchone()
+        if not шапка:
+            return err('Отчёт не найден', 404)
+        блоки = {}
+        for r in db.execute(
+                "SELECT block_key, content_json, is_edited FROM monthly_report_blocks "
+                "WHERE report_id=?", (report_id,)).fetchall():
+            try:
+                содержимое = json.loads(r['content_json'] or '{}')
+            except ValueError:
+                содержимое = {}
+            содержимое['_is_edited'] = bool(r['is_edited'])
+            блоки[r['block_key']] = содержимое
+        d = dict(шапка)
+        d['блоки'] = блоки
+        return ok(d)
+
+
+@app.get('/api/admin/integrity_check')
+def integrity_check():
+    """Проверка целостности справочника.
+
+    Поводом стали объекты 5 и 9: активные внутри деактивированного
+    проекта, в интерфейсе не видны, назначить инженера или завести
+    сводку невозможно. Обнаружилось только прямыми запросами к базе.
+    """
+    user_id = arg_int('user_id')
+    with db_conn() as db:
+        u = db.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
+        if not u or u['role'] not in ADMIN_ROLES:
+            return err('Доступ запрещён', 403)
+
+        сегодня = date.today().isoformat()
+        порог = (date.today() - timedelta(days=14)).isoformat()
+
+        проверки = [
+            ('project_inactive',
+             'Активные объекты в деактивированном проекте',
+             'Объект не виден в интерфейсе: назначить инженера и завести '
+             'сводку невозможно, данные молча выпадут из отчётности',
+             """SELECT o.id, o.name, p.name AS деталь
+                  FROM objects o
+                  JOIN projects p ON p.id = o.project_id
+                 WHERE COALESCE(o.is_active,1)=1 AND COALESCE(p.is_active,1)=0
+                 ORDER BY o.id"""),
+            ('no_engineers',
+             'Активные объекты без назначенных инженеров',
+             'Сводки по объекту вести некому',
+             """SELECT o.id, o.name, NULL AS деталь
+                  FROM objects o
+                 WHERE COALESCE(o.is_active,1)=1
+                   AND NOT EXISTS (SELECT 1 FROM object_users ou WHERE ou.object_id=o.id)
+                 ORDER BY o.id"""),
+            ('no_sections',
+             'Активные объекты без участков',
+             'Записи контроля попадут в отчёт без привязки к участку',
+             """SELECT o.id, o.name, NULL AS деталь
+                  FROM objects o
+                 WHERE COALESCE(o.is_active,1)=1
+                   AND NOT EXISTS (SELECT 1 FROM sections s
+                                    WHERE s.object_id=o.id AND COALESCE(s.is_active,1)=1)
+                 ORDER BY o.id"""),
+            ('stale_reports',
+             'Активные объекты без сводок дольше 14 дней',
+             'Возможно, работа на объекте не фиксируется',
+             """SELECT o.id, o.name, MAX(dr.report_date) AS деталь
+                  FROM objects o
+                  LEFT JOIN daily_reports dr ON dr.object_id = o.id
+                 WHERE COALESCE(o.is_active,1)=1
+                 GROUP BY o.id, o.name
+                HAVING MAX(dr.report_date) IS NULL OR MAX(dr.report_date) < ?
+                 ORDER BY o.id"""),
+        ]
+
+        результат = []
+        for ключ, заголовок, пояснение, sql in проверки:
+            параметры = (порог,) if ключ == 'stale_reports' else ()
+            строки = rows_to_list(db.execute(sql, параметры).fetchall())
+            результат.append({
+                'ключ': ключ, 'заголовок': заголовок, 'пояснение': пояснение,
+                'найдено': len(строки), 'объекты': строки,
+            })
+        return ok({'проверено': сегодня, 'порог_дней': 14, 'проверки': результат})
+
 
 # ─────────────────────────────────────────────────────────
 # ЭКСПОРТ — ZIP архив со сводками и фото

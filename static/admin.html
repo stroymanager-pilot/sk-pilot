@@ -138,6 +138,8 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
   <div class="sb-section">Данные</div>
   <div class="sb-item" data-page="reports" onclick="nav(this)"><span class="ico">📋</span> Все сводки</div>
   <div class="sb-item" data-page="photos" onclick="nav(this)"><span class="ico">📷</span> Все фото</div>
+  <div class="sb-item" data-page="monthly" onclick="nav(this)"><span class="ico">📄</span> Ежемесячный отчёт</div>
+  <div class="sb-item" data-page="integrity" onclick="nav(this)"><span class="ico">🩺</span> Проверка справочника</div>
   <div class="sb-bottom">
     <button class="logout-btn" onclick="downloadExportZip()" style="margin-bottom:6px;color:rgba(255,255,255,.9);background:rgba(212,168,67,.2)">📦 Экспорт (ZIP)</button>
     <button class="logout-btn" onclick="downloadExportDay()" style="margin-bottom:6px;color:rgba(255,255,255,.9);background:rgba(212,168,67,.15)">📅 Экспорт за день</button>
@@ -239,6 +241,38 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
   <div id="photoStats" style="margin-bottom:12px;font-size:13px;color:var(--text3)"></div>
   <div class="photo-grid-admin" id="photoGridAdmin"></div>
   <div id="photoEmpty" class="empty" style="display:none"><div class="empty-ico">📷</div>Нет фотографий</div>
+</div>
+
+<!-- ЕЖЕМЕСЯЧНЫЙ ОТЧЁТ -->
+<div class="page" id="page-monthly">
+  <div class="page-h">Ежемесячный отчёт</div>
+  <div class="page-d">Сборка черновика по группе объектов. Экспорт в DOCX и PDF — следующая подзадача.</div>
+  <div class="card" style="margin-bottom:14px">
+    <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;padding:4px 0">
+      <div class="form-row" style="margin:0;min-width:220px">
+        <label class="fl">Группа отчёта</label>
+        <select id="mrGroup" style="font-size:15px"></select>
+      </div>
+      <div class="form-row" style="margin:0;width:150px">
+        <label class="fl">Месяц</label>
+        <select id="mrMonth" style="font-size:15px"></select>
+      </div>
+      <div class="form-row" style="margin:0;width:110px">
+        <label class="fl">Год</label>
+        <select id="mrYear" style="font-size:15px"></select>
+      </div>
+      <button class="btn btn-primary" id="mrBtn" onclick="generateMonthly()">Собрать черновик</button>
+    </div>
+    <div id="mrGroupInfo" style="font-size:12px;color:var(--text3);padding:6px 0 0"></div>
+  </div>
+  <div id="mrResult"></div>
+</div>
+
+<!-- ПРОВЕРКА СПРАВОЧНИКА -->
+<div class="page" id="page-integrity">
+  <div class="page-h">Проверка справочника</div>
+  <div class="page-d">Ситуации, которые не видны в интерфейсе и обнаруживаются только запросами к базе.</div>
+  <div id="integrityResult"><div class="empty">Загрузка...</div></div>
 </div>
 
 </div><!-- /content -->
@@ -614,6 +648,8 @@ function nav(el) {
   else if (page==='engineers') loadEngineers();
   else if (page==='reports') loadAllReports();
   else if (page==='photos') loadAllPhotos();
+  else if (page==='monthly') loadMonthly();
+  else if (page==='integrity') loadIntegrity();
 }
 
 // ── MODALS ──
@@ -1307,6 +1343,171 @@ async function saveEngineer() {
     closeModal('engineer'); await init(); loadEngineers();
     showNewPassword('Инженер создан', r.data.full_name + ' · ' + r.data.email, r.data.password);
   }
+}
+
+// ── ЕЖЕМЕСЯЧНЫЙ ОТЧЁТ ──
+const МЕСЯЦЫ_РУ = ['','январь','февраль','март','апрель','май','июнь',
+                   'июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+let _mrGroups = [];
+
+async function loadMonthly() {
+  const r = await fetch(`${API}/api/report_groups?user_id=${userId}`).then(r=>r.json());
+  if (r.ok === false) { document.getElementById('mrResult').innerHTML =
+    `<div class="card"><div class="empty" style="color:var(--red)">${esc(r.error)}</div></div>`; return; }
+  _mrGroups = r.data || [];
+
+  const gs = document.getElementById('mrGroup');
+  if (!gs.options.length) {
+    gs.innerHTML = _mrGroups.map(g=>`<option value="${g.id}">${esc(g.report_title||g.name)}</option>`).join('');
+    gs.onchange = renderGroupInfo;
+    const ms = document.getElementById('mrMonth');
+    ms.innerHTML = МЕСЯЦЫ_РУ.slice(1).map((m,i)=>`<option value="${i+1}">${m}</option>`).join('');
+    const ys = document.getElementById('mrYear');
+    const now = new Date();
+    ys.innerHTML = [2026, 2027, 2028].map(y=>`<option value="${y}">${y}</option>`).join('');
+    // По умолчанию — прошлый месяц по местному времени
+    const п = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    ms.value = п.getMonth() + 1;
+    ys.value = п.getFullYear();
+  }
+  renderGroupInfo();
+}
+
+function renderGroupInfo() {
+  const g = _mrGroups.find(x=>String(x.id)===document.getElementById('mrGroup').value);
+  const el = document.getElementById('mrGroupInfo');
+  if (!g) { el.textContent = ''; return; }
+  el.innerHTML = 'Объекты группы: ' + (g.объекты||[]).map(o=>{
+    const период = (o.date_from||o.date_to)
+      ? ` <span style="color:var(--text3)">(${esc(o.date_from||'…')} — ${esc(o.date_to||'бессрочно')})</span>` : '';
+    return `<b>${esc(o.report_name||o.name)}</b>${период}`;
+  }).join(', ');
+}
+
+async function generateMonthly() {
+  const btn = document.getElementById('mrBtn');
+  const тело = {
+    report_group_id: parseInt(document.getElementById('mrGroup').value),
+    year:  parseInt(document.getElementById('mrYear').value),
+    month: parseInt(document.getElementById('mrMonth').value),
+  };
+  btn.disabled = true; btn.textContent = 'Собираю...';
+  try {
+    const r = await fetch(`${API}/api/monthly_reports/generate?user_id=${userId}`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      credentials:'include', body: JSON.stringify(тело)
+    }).then(r=>r.json());
+    if (r.ok === false) { toast(r.error||'Не удалось собрать','err');
+      document.getElementById('mrResult').innerHTML =
+        `<div class="card"><div class="empty" style="color:var(--red)">${esc(r.error||'')}</div></div>`;
+      return; }
+    renderMonthly(r.data);
+    toast('Черновик собран','ok');
+  } catch(e) { toast('Нет связи с сервером','err'); }
+  finally { btn.disabled = false; btn.textContent = 'Собрать черновик'; }
+}
+
+function _таблица(заголовки, строки) {
+  if (!строки.length) return '<div class="empty" style="padding:12px 0">Нет данных</div>';
+  return `<table class="table"><tr>${заголовки.map(h=>`<th>${h}</th>`).join('')}</tr>` +
+    строки.map(r=>`<tr>${r.map(c=>`<td>${c===null||c===undefined||c===''?'—':esc(String(c))}</td>`).join('')}</tr>`).join('') +
+    '</table>';
+}
+
+function _блок(заголовок, содержимое, примечание) {
+  return `<div class="card" style="margin-bottom:14px">
+    <div class="card-h"><span class="card-title">${esc(заголовок)}</span>
+      ${примечание?`<span style="font-size:11px;color:var(--text3)">${esc(примечание)}</span>`:''}</div>
+    ${содержимое}</div>`;
+}
+
+function renderMonthly(d) {
+  const Б = d.блоки || {};
+  let h = '';
+
+  // Шапка
+  const t = Б.title || {};
+  h += _блок('Титульный лист', `
+    <div style="font-size:15px;font-weight:700;margin-bottom:6px">${esc(t.report_title||'')} · ${esc(t.период||'')}</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:10px">Заказчик: ${esc(t.client_name||'—')}</div>
+    ${_таблица(['Объект','Адрес','Договор','Дата договора'],
+      (t.объекты||[]).map(o=>[o.наименование,o.адрес,o.договор,o.дата_договора]))}
+    <div style="margin-top:10px;font-size:13px"><b>Ответственные за период</b> (по авторам сводок)</div>
+    ${_таблица(['Инженер','Сводок','Статус'],
+      (t.ответственные||[]).map(o=>[o.full_name,o.сводок,o.is_active?'работает':'архив']))}`,
+    `сводок отобрано: ${d.сводок_отобрано}`);
+
+  // Свод контроля
+  const cs = Б.control_summary || {разделы:[]};
+  h += _блок('Свод проконтролированных работ',
+    (cs.разделы||[]).length
+      ? (cs.разделы||[]).map(р=>`<div style="margin-bottom:10px">
+          <div style="font-size:13px;font-weight:700;margin-bottom:4px">${esc(р.участок)} <span style="color:var(--text3);font-weight:400">— записей ${р.записей}</span></div>
+          ${_таблица(['Дата','Вид контроля','Этап работ','Операции','Метод'],
+            р.строки.map(с=>[с.дата,с.вид_контроля,с.этап,с.операции,с.метод]))}</div>`).join('')
+      : '<div class="empty" style="padding:12px 0">Нет данных</div>');
+
+  h += _блок('Отклонения', _таблица(['Дата выявления','Вид контроля','Участок','Подрядчик','Описание','Статус'],
+    (Б.deviations?.строки||[]).map(с=>[с.дата_выявления,с.вид_контроля,с.участок,с.подрядчик,с.описание,с.статус])));
+
+  h += _блок('Предписания', _таблица(['Номер','Дата','Срок','Участок','Кем выдано','Статус'],
+    (Б.prescriptions?.строки||[]).map(с=>[с.номер,с.дата_выдачи,с.срок,с.участок,с.кем_выдано,с.статус])));
+
+  h += _блок('Организации', _таблица(['Организация','Статус организации','Работала в периоде','Источник'],
+    (Б.organizations?.строки||[]).map(с=>[с.наименование,с.статус_организации,
+      с.работала_в_периоде?'да':'нет',(с.источники||[]).join(', ')])),
+    'справочник + фактические работы');
+
+  h += _блок('Персонал подрядчиков', _таблица(
+    ['Организация','Средняя численность','Максимум','Минимум','Дней присутствия','Виды работ'],
+    (Б.personnel?.строки||[]).map(с=>[с.наименование,с.средняя_численность,с.максимум,
+      с.минимум,с.дней_присутствия,(с.виды_работ||[]).join('; ')])));
+
+  h += _блок('Исполнительная документация', _таблица(['Дата','Организация','Работы','КС-2','КС-6а'],
+    (Б.as_built_docs?.строки||[]).map(с=>[с.дата,с.наименование,с.работы,с.кс2,с.кс6а?'есть':'нет'])));
+
+  h += _блок('Общие вопросы: планёрки и совещания', _таблица(['Дата','Время','Место','Участники','Вопросы'],
+    (Б.general?.строки||[]).map(с=>[с.дата,с.время,с.место,с.участники,с.вопросы])));
+
+  const ф = Б.photos?.строки || [];
+  h += _блок('Фотофиксация', ф.length
+    ? `<div class="photo-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">
+        ${ф.map(с=>`<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden">
+          <img src="${API}/uploads/${esc(с.файл)}" style="width:100%;aspect-ratio:16/10;object-fit:cover;display:block" loading="lazy">
+          <div style="padding:6px 8px;font-size:12px">${esc(с.подпись)}
+            ${с.подпись_своя?'':'<span style="color:var(--text3)"> · автоподпись</span>'}</div>
+        </div>`).join('')}</div>`
+    : '<div class="empty" style="padding:12px 0">Нет данных</div>', `фотографий: ${ф.length}`);
+
+  const пусто = Object.entries(Б).filter(([k,v])=>v && v.не_собирается).map(([k])=>k);
+  if (пусто.length) h += _блок('Блоки, которые пока не собираются',
+    `<div style="font-size:13px;color:var(--text3)">${пусто.map(esc).join(', ')} — заполняются в следующих подзадачах</div>`);
+
+  if ((d.сохранены_правки||[]).length)
+    h = _блок('Ручные правки сохранены',
+      `<div style="font-size:13px">Не перезаписаны блоки: ${d.сохранены_правки.map(esc).join(', ')}</div>`) + h;
+
+  document.getElementById('mrResult').innerHTML = h;
+}
+
+// ── ПРОВЕРКА СПРАВОЧНИКА ──
+async function loadIntegrity() {
+  const el = document.getElementById('integrityResult');
+  el.innerHTML = '<div class="empty">Загрузка...</div>';
+  const r = await fetch(`${API}/api/admin/integrity_check?user_id=${userId}`).then(r=>r.json());
+  if (r.ok === false) { el.innerHTML = `<div class="card"><div class="empty" style="color:var(--red)">${esc(r.error)}</div></div>`; return; }
+  const d = r.data;
+  el.innerHTML = (d.проверки||[]).map(п=>{
+    const цвет = п.найдено ? 'var(--gold)' : 'var(--green)';
+    return `<div class="card" style="margin-bottom:14px">
+      <div class="card-h"><span class="card-title">${esc(п.заголовок)}</span>
+        <span class="badge" style="background:${цвет};color:#fff">${п.найдено}</span></div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:8px">${esc(п.пояснение)}</div>
+      ${п.найдено
+        ? _таблица(['id','Объект','Подробность'], п.объекты.map(o=>[o.id,o.name,o['деталь']]))
+        : '<div style="font-size:13px;color:var(--green)">Замечаний нет</div>'}
+    </div>`;
+  }).join('');
 }
 
 // ── ВСЕ СВОДКИ ──

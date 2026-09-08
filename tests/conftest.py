@@ -92,6 +92,13 @@ TABLES = [
     'personnel_entries', 'daily_reports', 'user_sections', 'object_users',
     'contractors', 'sections', 'objects', 'partner_projects', 'partners',
     'projects', 'users', 'organizations',
+    # Генератор ежемесячного отчёта (шаг 2-1): без очистки группы отчётов
+    # переживали бы соседний тест и ломались на уникальности имени.
+    'monthly_report_blocks', 'monthly_reports',
+    'report_template_blocks', 'report_templates',
+    'report_group_objects', 'report_groups',
+    'author_supervision', 'volume_changes', 'schedule_notes',
+    'design_approvals', 'monthly_progress', 'object_work_types', 'work_types',
 ]
 
 
