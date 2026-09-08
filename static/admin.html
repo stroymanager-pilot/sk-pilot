@@ -118,6 +118,61 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 /* FILTERS */
 .filters{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
 .filters select{width:auto;font-size:12px;padding:6px 28px 6px 10px;}
+/* Шапка печатной версии — на экране не нужна */
+.print-only{display:none;}
+
+/* ПЕЧАТЬ ЧЕРНОВИКА ЕЖЕМЕСЯЧНОГО ОТЧЁТА
+   Браузерная печать в PDF для обсуждения структуры с инженерами.
+   Полноценный экспорт — DOCX с фирменным бланком — в подзадаче 2-4. */
+@media print {
+  @page { size: A4 portrait; margin: 20mm; }
+
+  /* Служебное на лист не идёт */
+  .sidebar, .page-d, .toast, .modal-bg, .btn, .filters,
+  #page-monthly .form-row, #mrGroupInfo { display: none !important; }
+  /* Печатаем только экран отчёта, чем бы ни было заполнено остальное */
+  .page { display: none !important; }
+  #page-monthly.active { display: block !important; }
+  #page-monthly .page-h { display: none; }
+  /* Карточка с выбором группы и месяца целиком служебная */
+  #page-monthly > .card { display: none !important; }
+
+  html, body { background: #fff; }
+  .layout { display: block; }
+  .content { padding: 0; overflow: visible; }
+  .print-only { display: block; }
+
+  .print-title { text-align: center; margin-bottom: 8mm; }
+  .print-title b { font-size: 17px; display: block; }
+  .print-title span { font-size: 13px; color: #333; }
+
+  /* Блок отчёта не должен рваться, а его заголовок — оставаться
+     внизу листа в отрыве от таблицы */
+  .card { box-shadow: none; border: none; border-top: 1px solid #999;
+          border-radius: 0; margin-bottom: 6mm; overflow: visible;
+          break-inside: auto; }
+  .card-h { break-after: avoid; page-break-after: avoid;
+            padding: 4mm 0 2mm; border: none; background: none; }
+  .card-title { font-size: 14px; }
+
+  .table { break-inside: auto; }
+  .table th { background: none; font-size: 10px; padding: 2mm 2mm;
+              border-bottom: 1px solid #333; }
+  .table td { font-size: 11px; padding: 1.5mm 2mm; border-bottom: 1px solid #ddd; }
+  /* Строку таблицы не режем пополам */
+  .table tr { break-inside: avoid; page-break-inside: avoid; }
+  .table thead { display: table-header-group; }
+  .table tr:hover td { background: none; }
+
+  /* Фотографии — две на лист, подпись под каждой */
+  .photo-grid { grid-template-columns: 1fr !important; gap: 6mm !important; }
+  .photo-grid > div { break-inside: avoid; page-break-inside: avoid;
+                      border: 1px solid #999 !important; }
+  .photo-grid img { aspect-ratio: auto !important; height: 105mm !important;
+                    object-fit: contain !important; background: #f4f4f4; }
+
+  a[href]:after { content: none !important; }
+}
 </style>
 </head>
 <body>
@@ -262,9 +317,13 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
         <select id="mrYear" style="font-size:15px"></select>
       </div>
       <button class="btn btn-primary" id="mrBtn" onclick="generateMonthly()">Собрать черновик</button>
+      <button class="btn" id="mrPrint" onclick="window.print()" disabled
+              title="Печать черновика — из диалога печати сохраняется PDF">🖨 Печать</button>
     </div>
     <div id="mrGroupInfo" style="font-size:12px;color:var(--text3);padding:6px 0 0"></div>
   </div>
+  <!-- Заголовок печатной версии: на экране скрыт, на листе идёт первым -->
+  <div class="print-only print-title" id="mrPrintTitle"></div>
   <div id="mrResult"></div>
 </div>
 
@@ -1398,6 +1457,8 @@ async function generateMonthly() {
       credentials:'include', body: JSON.stringify(тело)
     }).then(r=>r.json());
     if (r.ok === false) { toast(r.error||'Не удалось собрать','err');
+      document.getElementById('mrPrint').disabled = true;
+      document.getElementById('mrPrintTitle').innerHTML = '';
       document.getElementById('mrResult').innerHTML =
         `<div class="card"><div class="empty" style="color:var(--red)">${esc(r.error||'')}</div></div>`;
       return; }
@@ -1488,6 +1549,11 @@ function renderMonthly(d) {
       `<div style="font-size:13px">Не перезаписаны блоки: ${d.сохранены_правки.map(esc).join(', ')}</div>`) + h;
 
   document.getElementById('mrResult').innerHTML = h;
+
+  // Печатная версия: свой заголовок вместо служебной шапки экрана
+  document.getElementById('mrPrintTitle').innerHTML =
+    `<b>${esc(t.report_title||'')}</b><span>Отчёт за ${esc(t.период||'')}</span>`;
+  document.getElementById('mrPrint').disabled = false;
 }
 
 // ── ПРОВЕРКА СПРАВОЧНИКА ──
