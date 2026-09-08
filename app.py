@@ -158,6 +158,20 @@ def auto_migrate():
             ("ALTER TABLE users ADD COLUMN organization_id INTEGER", "users.organization_id"),
             ("ALTER TABLE projects ADD COLUMN organization_id INTEGER", "projects.organization_id"),
             ("ALTER TABLE partners ADD COLUMN organization_id INTEGER", "partners.organization_id"),
+            # Шаг 2-1: реквизиты для ежемесячного отчёта.
+            # Только для SQLite-баз разработки — на PostgreSQL auto_migrate
+            # не выполняется, там схему меняет db/schema_2_1_report_generator.sql
+            ("ALTER TABLE objects ADD COLUMN report_name TEXT", "objects.report_name"),
+            ("ALTER TABLE objects ADD COLUMN object_type TEXT", "objects.object_type"),
+            ("ALTER TABLE objects ADD COLUMN contract_date TEXT", "objects.contract_date"),
+            ("ALTER TABLE objects ADD COLUMN contract_amendment TEXT", "objects.contract_amendment"),
+            ("ALTER TABLE objects ADD COLUMN client_partner_id INTEGER", "objects.client_partner_id"),
+            ("ALTER TABLE objects ADD COLUMN client_signatory TEXT", "objects.client_signatory"),
+            ("ALTER TABLE objects ADD COLUMN client_signatory_role TEXT", "objects.client_signatory_role"),
+            ("ALTER TABLE objects ADD COLUMN contractor_signatory TEXT", "objects.contractor_signatory"),
+            ("ALTER TABLE objects ADD COLUMN contractor_signatory_role TEXT", "objects.contractor_signatory_role"),
+            ("ALTER TABLE sections ADD COLUMN section_type TEXT", "sections.section_type"),
+            ("ALTER TABLE prescriptions_log ADD COLUMN issued_by_name TEXT", "prescriptions_log.issued_by_name"),
         ]
         for sql, label in migrations:
             try:

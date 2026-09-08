@@ -73,14 +73,25 @@ CREATE TABLE IF NOT EXISTS objects (
     contract_number TEXT,
     project_id      INTEGER,
     is_active       INTEGER DEFAULT 1,
+    -- Реквизиты для ежемесячного отчёта (шаг 2-1)
+    report_name               TEXT,   -- наименование объекта для заказчика
+    object_type               TEXT,
+    contract_date             TEXT,
+    contract_amendment        TEXT,
+    client_partner_id         INTEGER,  -- ссылка на partners.id, без жёсткого FK
+    client_signatory          TEXT,
+    client_signatory_role     TEXT,
+    contractor_signatory      TEXT,
+    contractor_signatory_role TEXT,
     created_at      TEXT DEFAULT to_char(now(), 'YYYY-MM-DD HH24:MI:SS')
 );
 
 CREATE TABLE IF NOT EXISTS sections (
-    id        INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    object_id INTEGER NOT NULL,
-    name      TEXT NOT NULL,
-    is_active INTEGER DEFAULT 1
+    id           INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    object_id    INTEGER NOT NULL,
+    name         TEXT NOT NULL,
+    section_type TEXT,          -- корпус / зона / общая площадка (шаг 2-1)
+    is_active    INTEGER DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS contractors (
@@ -227,7 +238,8 @@ CREATE TABLE IF NOT EXISTS prescriptions_log (
     issue_date         TEXT,
     section_id         INTEGER,
     deadline           TEXT,
-    status             TEXT
+    status             TEXT,
+    issued_by_name     TEXT          -- кем выдано (шаг 2-1)
 );
 
 CREATE TABLE IF NOT EXISTS meetings (
@@ -266,3 +278,185 @@ CREATE INDEX IF NOT EXISTS idx_contractors_object  ON contractors (object_id);
 CREATE INDEX IF NOT EXISTS idx_contractors_partner ON contractors (partner_id);
 CREATE INDEX IF NOT EXISTS idx_object_users_user   ON object_users (user_id);
 CREATE INDEX IF NOT EXISTS idx_user_sections_owner ON user_sections (object_id, user_id);
+
+-- ─────────────────────────────────────────────
+-- ГЕНЕРАТОР ЕЖЕМЕСЯЧНОГО ОТЧЁТА (шаг 2-1)
+-- Начальное наполнение — в db/schema_2_1_report_generator.sql,
+-- здесь только структура.
+-- ─────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS report_groups (
+    id           INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name         TEXT NOT NULL,              -- внутреннее имя группы
+    client_name  TEXT,                       -- заказчик
+    report_title TEXT,                       -- наименование для заказчика
+    is_active    INTEGER NOT NULL DEFAULT 1,
+    created_at   TEXT DEFAULT to_char(now(), 'YYYY-MM-DD HH24:MI:SS'),
+    CONSTRAINT report_groups_name_key UNIQUE (name)
+);
+
+-- Уникальности по (группа, объект) намеренно НЕТ: объект может входить
+-- в группу несколько раз с разными периодами.
+CREATE TABLE IF NOT EXISTS report_group_objects (
+    id              INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    report_group_id INTEGER NOT NULL,
+    object_id       INTEGER NOT NULL,
+    date_from       TEXT,                    -- YYYY-MM-DD, NULL = с начала
+    date_to         TEXT                     -- YYYY-MM-DD, NULL = бессрочно
+);
+
+-- ─────────────────────────────────────────────────────────────
+-- 2.2. ШАБЛОНЫ
+-- Набор блоков фиксирован, различается полнота, а не состав.
+-- ─────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS report_templates (
+    id        INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name      TEXT NOT NULL,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    CONSTRAINT report_templates_name_key UNIQUE (name)
+);
+
+CREATE TABLE IF NOT EXISTS report_template_blocks (
+    id            INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    template_id   INTEGER NOT NULL,
+    block_key     TEXT NOT NULL,             -- фиксированный перечень, см. ниже
+    is_enabled    INTEGER NOT NULL DEFAULT 1,
+    fill_mode     TEXT NOT NULL DEFAULT 'auto',   -- auto / manual / external
+    sort_order    INTEGER NOT NULL DEFAULT 0,
+    settings_json TEXT,
+    CONSTRAINT report_template_blocks_key UNIQUE (template_id, block_key)
+);
+
+-- ─────────────────────────────────────────────────────────────
+-- 2.3. ОТЧЁТ
+-- ─────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS monthly_reports (
+    id              INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    report_group_id INTEGER NOT NULL,
+    year            INTEGER NOT NULL,
+    month           INTEGER NOT NULL,
+    template_id     INTEGER,
+    status          TEXT NOT NULL DEFAULT 'черновик',
+                    -- черновик / на_проверке / утверждён / выпущен
+    created_by      INTEGER,
+    submitted_at    TEXT,
+    reviewed_by     INTEGER,
+    approved_at     TEXT,
+    version         INTEGER NOT NULL DEFAULT 1,
+    created_at      TEXT DEFAULT to_char(now(), 'YYYY-MM-DD HH24:MI:SS'),
+    -- version в ключе: версии допускаются, случайный дубль черновика — нет
+    CONSTRAINT monthly_reports_period_key UNIQUE (report_group_id, year, month, version)
+);
+
+-- Один блок на ключ в отчёте: повторная сборка обновляет строку (upsert),
+-- поэтому ручные правки в content_json не задваиваются.
+CREATE TABLE IF NOT EXISTS monthly_report_blocks (
+    id           INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    report_id    INTEGER NOT NULL REFERENCES monthly_reports(id) ON DELETE CASCADE,
+    block_key    TEXT NOT NULL,
+    content_json TEXT,
+    is_edited    INTEGER NOT NULL DEFAULT 0,
+    updated_by   INTEGER,
+    updated_at   TEXT,
+    CONSTRAINT monthly_report_blocks_key UNIQUE (report_id, block_key)
+);
+
+-- ─────────────────────────────────────────────────────────────
+-- 2.4. РЕЕСТРЫ РУЧНЫХ БЛОКОВ
+-- Ручной блок — список записей с жизненным циклом, а не текст.
+-- ─────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS author_supervision (
+    id         INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    object_id  INTEGER NOT NULL,
+    issue_date TEXT,
+    author     TEXT,
+    essence    TEXT,
+    status     TEXT,
+    closed_at  TEXT,
+    note       TEXT
+);
+
+CREATE TABLE IF NOT EXISTS volume_changes (
+    id               INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    object_id        INTEGER NOT NULL,
+    contractor_id    INTEGER,
+    contract_ref     TEXT,
+    work_name        TEXT,
+    volume_estimate  TEXT,
+    volume_fact      TEXT,
+    project_sheet    TEXT,
+    note             TEXT,
+    created_at       TEXT DEFAULT to_char(now(), 'YYYY-MM-DD HH24:MI:SS')
+);
+
+CREATE TABLE IF NOT EXISTS schedule_notes (
+    id         INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    object_id  INTEGER NOT NULL,
+    essence    TEXT,
+    event_date TEXT,
+    status     TEXT,
+    closed_at  TEXT,
+    note       TEXT
+);
+
+CREATE TABLE IF NOT EXISTS design_approvals (
+    id              INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    object_id       INTEGER NOT NULL,
+    decision        TEXT,
+    initiated_at    TEXT,
+    issued_at       TEXT,
+    approval_status TEXT,
+    note            TEXT
+);
+
+-- ─────────────────────────────────────────────────────────────
+-- 2.5. ВРЕМЕННАЯ ТАБЛИЦА ПРОЦЕНТОВ
+-- До реализации ведомости объёмов (шаг 4) проценты вводятся вручную.
+-- Справочник видов работ в этой подзадаче НЕ наполняется.
+-- ─────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS work_types (
+    id          INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    object_type TEXT,
+    group_name  TEXT,
+    name        TEXT NOT NULL,
+    sort_order  INTEGER NOT NULL DEFAULT 0,
+    is_active   INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS object_work_types (
+    id           INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    object_id    INTEGER NOT NULL,
+    work_type_id INTEGER NOT NULL,
+    sort_order   INTEGER NOT NULL DEFAULT 0,
+    is_active    INTEGER NOT NULL DEFAULT 1,
+    CONSTRAINT object_work_types_key UNIQUE (object_id, work_type_id)
+);
+
+CREATE TABLE IF NOT EXISTS monthly_progress (
+    id           INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    object_id    INTEGER NOT NULL,
+    section_id   INTEGER,
+    work_type_id INTEGER,
+    year         INTEGER NOT NULL,
+    month        INTEGER NOT NULL,
+    percent      INTEGER,
+    note         TEXT,
+    updated_by   INTEGER,
+    updated_at   TEXT
+);
+
+-- Индексы генератора отчёта
+CREATE INDEX IF NOT EXISTS idx_rgo_group        ON report_group_objects (report_group_id);
+CREATE INDEX IF NOT EXISTS idx_rgo_object       ON report_group_objects (object_id);
+CREATE INDEX IF NOT EXISTS idx_mr_group_period  ON monthly_reports (report_group_id, year, month);
+CREATE INDEX IF NOT EXISTS idx_mrb_report       ON monthly_report_blocks (report_id);
+CREATE INDEX IF NOT EXISTS idx_rtb_template     ON report_template_blocks (template_id);
+CREATE INDEX IF NOT EXISTS idx_authsup_object   ON author_supervision (object_id);
+CREATE INDEX IF NOT EXISTS idx_volchg_object    ON volume_changes (object_id);
+CREATE INDEX IF NOT EXISTS idx_schednotes_object ON schedule_notes (object_id);
+CREATE INDEX IF NOT EXISTS idx_designappr_object ON design_approvals (object_id);
+CREATE INDEX IF NOT EXISTS idx_progress_period  ON monthly_progress (object_id, year, month);

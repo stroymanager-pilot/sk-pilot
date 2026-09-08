@@ -180,6 +180,15 @@ def init_db():
         address         TEXT,
         client_name     TEXT,           -- наименование заказчика
         contract_number TEXT,           -- номер договора
+        report_name               TEXT, -- реквизиты для ежемесячного отчёта (2-1)
+        object_type               TEXT,
+        contract_date             TEXT,
+        contract_amendment        TEXT,
+        client_partner_id         INTEGER,
+        client_signatory          TEXT,
+        client_signatory_role     TEXT,
+        contractor_signatory      TEXT,
+        contractor_signatory_role TEXT,
         project_id      INTEGER,        -- ссылка на проект
         is_active       INTEGER DEFAULT 1,
         created_at      TEXT DEFAULT (datetime('now'))
@@ -189,6 +198,7 @@ def init_db():
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
         object_id   INTEGER NOT NULL REFERENCES objects(id),
         name        TEXT NOT NULL,      -- "Корпус 5.3.1", "Блок 2", "Секция А" и т.д.
+        section_type TEXT,               -- корпус / зона / общая площадка (2-1)
         is_active   INTEGER DEFAULT 1
     );
 
@@ -295,7 +305,8 @@ def init_db():
         issue_date          TEXT,
         section_id          INTEGER,    -- нет FK: допускает личные участки (user_sections)
         deadline            TEXT,
-        status              TEXT        -- статус из TeamJect (вносится вручную)
+        status              TEXT,       -- статус из TeamJect (вносится вручную)
+        issued_by_name      TEXT        -- кем выдано (2-1)
     );
 
     -- Совещания
@@ -375,6 +386,174 @@ def init_db():
         partner_id INTEGER NOT NULL,
         project_id INTEGER NOT NULL,
         UNIQUE(partner_id, project_id)
+    );
+
+    -- ─────────────────────────────────────────────
+    -- ГЕНЕРАТОР ЕЖЕМЕСЯЧНОГО ОТЧЁТА (шаг 2-1)
+    -- ─────────────────────────────────────────────
+
+    CREATE TABLE IF NOT EXISTS report_groups (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        name         TEXT NOT NULL,              -- внутреннее имя группы
+        client_name  TEXT,                       -- заказчик
+        report_title TEXT,                       -- наименование для заказчика
+        is_active    INTEGER NOT NULL DEFAULT 1,
+        created_at   TEXT DEFAULT (datetime('now')),
+        UNIQUE (name)
+    );
+
+    -- Уникальности по (группа, объект) намеренно НЕТ: объект может входить
+    -- в группу несколько раз с разными периодами.
+    CREATE TABLE IF NOT EXISTS report_group_objects (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        report_group_id INTEGER NOT NULL,
+        object_id       INTEGER NOT NULL,
+        date_from       TEXT,                    -- YYYY-MM-DD, NULL = с начала
+        date_to         TEXT                     -- YYYY-MM-DD, NULL = бессрочно
+    );
+
+    -- ─────────────────────────────────────────────────────────────
+    -- 2.2. ШАБЛОНЫ
+    -- Набор блоков фиксирован, различается полнота, а не состав.
+    -- ─────────────────────────────────────────────────────────────
+
+    CREATE TABLE IF NOT EXISTS report_templates (
+        id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        name      TEXT NOT NULL,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        UNIQUE (name)
+    );
+
+    CREATE TABLE IF NOT EXISTS report_template_blocks (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        template_id   INTEGER NOT NULL,
+        block_key     TEXT NOT NULL,             -- фиксированный перечень, см. ниже
+        is_enabled    INTEGER NOT NULL DEFAULT 1,
+        fill_mode     TEXT NOT NULL DEFAULT 'auto',   -- auto / manual / external
+        sort_order    INTEGER NOT NULL DEFAULT 0,
+        settings_json TEXT,
+        UNIQUE (template_id, block_key)
+    );
+
+    -- ─────────────────────────────────────────────────────────────
+    -- 2.3. ОТЧЁТ
+    -- ─────────────────────────────────────────────────────────────
+
+    CREATE TABLE IF NOT EXISTS monthly_reports (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        report_group_id INTEGER NOT NULL,
+        year            INTEGER NOT NULL,
+        month           INTEGER NOT NULL,
+        template_id     INTEGER,
+        status          TEXT NOT NULL DEFAULT 'черновик',
+                        -- черновик / на_проверке / утверждён / выпущен
+        created_by      INTEGER,
+        submitted_at    TEXT,
+        reviewed_by     INTEGER,
+        approved_at     TEXT,
+        version         INTEGER NOT NULL DEFAULT 1,
+        created_at      TEXT DEFAULT (datetime('now')),
+        -- version в ключе: версии допускаются, случайный дубль черновика — нет
+        UNIQUE (report_group_id, year, month, version)
+    );
+
+    -- Один блок на ключ в отчёте: повторная сборка обновляет строку (upsert),
+    -- поэтому ручные правки в content_json не задваиваются.
+    CREATE TABLE IF NOT EXISTS monthly_report_blocks (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        report_id    INTEGER NOT NULL REFERENCES monthly_reports(id) ON DELETE CASCADE,
+        block_key    TEXT NOT NULL,
+        content_json TEXT,
+        is_edited    INTEGER NOT NULL DEFAULT 0,
+        updated_by   INTEGER,
+        updated_at   TEXT,
+        UNIQUE (report_id, block_key)
+    );
+
+    -- ─────────────────────────────────────────────────────────────
+    -- 2.4. РЕЕСТРЫ РУЧНЫХ БЛОКОВ
+    -- Ручной блок — список записей с жизненным циклом, а не текст.
+    -- ─────────────────────────────────────────────────────────────
+
+    CREATE TABLE IF NOT EXISTS author_supervision (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        object_id  INTEGER NOT NULL,
+        issue_date TEXT,
+        author     TEXT,
+        essence    TEXT,
+        status     TEXT,
+        closed_at  TEXT,
+        note       TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS volume_changes (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        object_id        INTEGER NOT NULL,
+        contractor_id    INTEGER,
+        contract_ref     TEXT,
+        work_name        TEXT,
+        volume_estimate  TEXT,
+        volume_fact      TEXT,
+        project_sheet    TEXT,
+        note             TEXT,
+        created_at       TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS schedule_notes (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        object_id  INTEGER NOT NULL,
+        essence    TEXT,
+        event_date TEXT,
+        status     TEXT,
+        closed_at  TEXT,
+        note       TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS design_approvals (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        object_id       INTEGER NOT NULL,
+        decision        TEXT,
+        initiated_at    TEXT,
+        issued_at       TEXT,
+        approval_status TEXT,
+        note            TEXT
+    );
+
+    -- ─────────────────────────────────────────────────────────────
+    -- 2.5. ВРЕМЕННАЯ ТАБЛИЦА ПРОЦЕНТОВ
+    -- До реализации ведомости объёмов (шаг 4) проценты вводятся вручную.
+    -- Справочник видов работ в этой подзадаче НЕ наполняется.
+    -- ─────────────────────────────────────────────────────────────
+
+    CREATE TABLE IF NOT EXISTS work_types (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        object_type TEXT,
+        group_name  TEXT,
+        name        TEXT NOT NULL,
+        sort_order  INTEGER NOT NULL DEFAULT 0,
+        is_active   INTEGER NOT NULL DEFAULT 1
+    );
+
+    CREATE TABLE IF NOT EXISTS object_work_types (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        object_id    INTEGER NOT NULL,
+        work_type_id INTEGER NOT NULL,
+        sort_order   INTEGER NOT NULL DEFAULT 0,
+        is_active    INTEGER NOT NULL DEFAULT 1,
+        UNIQUE (object_id, work_type_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS monthly_progress (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        object_id    INTEGER NOT NULL,
+        section_id   INTEGER,
+        work_type_id INTEGER,
+        year         INTEGER NOT NULL,
+        month        INTEGER NOT NULL,
+        percent      INTEGER,
+        note         TEXT,
+        updated_by   INTEGER,
+        updated_at   TEXT
     );
 
     -- ─────────────────────────────────────────────
