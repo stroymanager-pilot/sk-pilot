@@ -347,7 +347,12 @@ async function submitPwdChange(){
 if (userRole === 'root' || userRole === 'admin') window.location.href = '/admin.html';
 
 const today = new Date();
-const dateStr = today.toISOString().split('T')[0];
+// Дата сводки — по МЕСТНОМУ времени, а не по UTC. toISOString() переводит
+// в UTC, и у инженера в UTC+3 сводка, открытая между 00:00 и 03:00, уходила
+// в предыдущие сутки, а на границе месяца — в предыдущий месяц.
+const dateStr = today.getFullYear() + '-'
+  + String(today.getMonth() + 1).padStart(2, '0') + '-'
+  + String(today.getDate()).padStart(2, '0');
 document.getElementById('hSub').textContent = userName + ' · ' + today.toLocaleDateString('ru-RU',{weekday:'short',day:'numeric',month:'short'});
 
 const STEPS = [
